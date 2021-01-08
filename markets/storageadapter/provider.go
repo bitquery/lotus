@@ -22,7 +22,6 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/events/state"
@@ -48,56 +47,33 @@ type ProviderNodeAdapter struct {
 	secb *sectorblocks.SectorBlocks
 	ev   *events.Events
 
-	publishSpec, addBalanceSpec *api.MessageSendSpec
-	dsMatcher                   *dealStateMatcher
+	dealPublisher *DealPublisher
+
+	addBalanceSpec *api.MessageSendSpec
+	dsMatcher      *dealStateMatcher
 }
 
-func NewProviderNodeAdapter(fc *config.MinerFeeConfig) func(dag dtypes.StagingDAG, secb *sectorblocks.SectorBlocks, full api.FullNode) storagemarket.StorageProviderNode {
-	return func(dag dtypes.StagingDAG, secb *sectorblocks.SectorBlocks, full api.FullNode) storagemarket.StorageProviderNode {
+func NewProviderNodeAdapter(fc *config.MinerFeeConfig) func(dag dtypes.StagingDAG, secb *sectorblocks.SectorBlocks, full api.FullNode, dealPublisher *DealPublisher) storagemarket.StorageProviderNode {
+	return func(dag dtypes.StagingDAG, secb *sectorblocks.SectorBlocks, full api.FullNode, dealPublisher *DealPublisher) storagemarket.StorageProviderNode {
 		na := &ProviderNodeAdapter{
 			FullNode: full,
 
-			dag:       dag,
-			secb:      secb,
-			ev:        events.NewEvents(context.TODO(), full),
-			dsMatcher: newDealStateMatcher(state.NewStatePredicates(state.WrapFastAPI(full))),
+			dag:           dag,
+			secb:          secb,
+			ev:            events.NewEvents(context.TODO(), full),
+			dealPublisher: dealPublisher,
+			dsMatcher:     newDealStateMatcher(state.NewStatePredicates(state.WrapFastAPI(full))),
 		}
 		if fc != nil {
-			na.publishSpec = &api.MessageSendSpec{MaxFee: abi.TokenAmount(fc.MaxPublishDealsFee)}
 			na.addBalanceSpec = &api.MessageSendSpec{MaxFee: abi.TokenAmount(fc.MaxMarketBalanceAddFee)}
 		}
+
 		return na
 	}
 }
 
 func (n *ProviderNodeAdapter) PublishDeals(ctx context.Context, deal storagemarket.MinerDeal) (cid.Cid, error) {
-	log.Info("publishing deal")
-
-	mi, err := n.StateMinerInfo(ctx, deal.Proposal.Provider, types.EmptyTSK)
-	if err != nil {
-		return cid.Undef, err
-	}
-
-	params, err := actors.SerializeParams(&market2.PublishStorageDealsParams{
-		Deals: []market2.ClientDealProposal{deal.ClientDealProposal},
-	})
-
-	if err != nil {
-		return cid.Undef, xerrors.Errorf("serializing PublishStorageDeals params failed: %w", err)
-	}
-
-	// TODO: We may want this to happen after fetching data
-	smsg, err := n.MpoolPushMessage(ctx, &types.Message{
-		To:     market.Address,
-		From:   mi.Worker,
-		Value:  types.NewInt(0),
-		Method: market.Methods.PublishStorageDeals,
-		Params: params,
-	}, n.publishSpec)
-	if err != nil {
-		return cid.Undef, err
-	}
-	return smsg.Cid(), nil
+	return n.dealPublisher.Publish(ctx, deal.ClientDealProposal)
 }
 
 func (n *ProviderNodeAdapter) OnDealComplete(ctx context.Context, deal storagemarket.MinerDeal, pieceSize abi.UnpaddedPieceSize, pieceData io.Reader) (*storagemarket.PackingResult, error) {

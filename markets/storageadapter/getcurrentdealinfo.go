@@ -52,6 +52,7 @@ func GetCurrentDealInfo(ctx context.Context, ts *types.TipSet, api getCurrentDea
 	}
 
 	if len(retval.IDs) != 1 {
+		// TODO: now we send messages with more than one deal
 		// market currently only ever sends messages with 1 deal
 		return dealID, nil, xerrors.Errorf("can't recover dealIDs from publish deal message with more than 1 deal")
 	}
