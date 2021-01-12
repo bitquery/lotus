@@ -371,6 +371,34 @@ func (a *StateAPI) StateCall(ctx context.Context, msg *types.Message, tsk types.
 	return res, err
 }
 
+func (a *StateAPI) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ( []*api.InvocResult, error) {
+	base_ts, err := a.Chain.GetTipSetFromKey(tsk)
+	if err != nil {
+		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
+	}
+	array := make([]*api.InvocResult, len(msgs))
+	for index, msg := range msgs {
+		ts := base_ts
+		var res *api.InvocResult
+		for {
+			res, err = a.StateManager.Call(ctx, msg, ts)
+			if err != stmgr.ErrExpensiveFork {
+				break
+			}
+			ts, err = a.Chain.GetTipSetFromKey(ts.Parents())
+			if err != nil {
+				return nil, xerrors.Errorf("getting parent tipset: %w", err)
+			}
+		}
+		if err != nil {
+			return nil, xerrors.Errorf("error getting call result: %w", err)
+		}
+		array[index] = res
+	}
+
+	return array, err
+}
+
 func (a *StateAPI) StateReplay(ctx context.Context, tsk types.TipSetKey, mc cid.Cid) (*api.InvocResult, error) {
 	msgToReplay := mc
 	var ts *types.TipSet
