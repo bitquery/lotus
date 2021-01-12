@@ -552,6 +552,38 @@ func (a *StateAPI) StateDecodeParams(ctx context.Context, toAddr address.Address
 	return paramType, nil
 }
 
+func (a *StateAPI) StateMultiDecodeParams(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error) {
+
+	ts, err := a.Chain.GetTipSetFromKey(tsk)
+	if err != nil {
+		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
+	}
+
+	state, err := a.stateForTs(ctx, ts)
+	if err != nil {
+		return nil, xerrors.Errorf("computing tipset state failed: %w", err)
+	}
+
+	if (len(toAddrs) != len(methods)) || (len(toAddrs) != len(params)) {
+		return nil, xerrors.Errorf("Array sizes are not equal: toAddrs: %v methods: %v params: %v ", len(toAddrs) , len(methods), len(params))
+	}
+
+	array := make([]interface{}, len(toAddrs))
+	for index, toAddr := range toAddrs {
+		act := state.GetActor(toAddr)
+
+		paramType, err := stmgr.GetParamType(act.Code, methods[index])
+		if err != nil {
+			return nil, xerrors.Errorf("getting params type: %w", err)
+		}
+		if err = paramType.UnmarshalCBOR(bytes.NewReader(params[index])); err != nil {
+			return nil, err
+		}
+		array[index]=paramType
+	}
+	return array, nil
+}
+
 // This is on StateAPI because miner.Miner requires this, and MinerAPI requires miner.Miner
 func (a *StateAPI) MinerGetBaseInfo(ctx context.Context, maddr address.Address, epoch abi.ChainEpoch, tsk types.TipSetKey) (*api.MiningBaseInfo, error) {
 	return stmgr.MinerGetBaseInfo(ctx, a.StateManager, a.Beacon, tsk, epoch, maddr, a.ProofVerifier)
