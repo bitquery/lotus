@@ -570,7 +570,10 @@ func (a *StateAPI) StateMultiDecodeParams(ctx context.Context, toAddrs []address
 
 	array := make([]interface{}, len(toAddrs))
 	for index, toAddr := range toAddrs {
-		act := state.GetActor(toAddr)
+		act, err := state.GetActor(toAddr)
+		if err != nil {
+			return nil, xerrors.Errorf("getting actor %v failed: %w", toAddr, err)
+		}
 
 		paramType, err := stmgr.GetParamType(act.Code, methods[index])
 		if err != nil {
