@@ -999,6 +999,10 @@ func (c *FullNodeStruct) StateGetActor(ctx context.Context, actor address.Addres
 	return c.Internal.StateGetActor(ctx, actor, tsk)
 }
 
+func (c *FullNodeStruct) StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) {
+	return c.Internal.StateMultiGetActor(ctx, actors, tsk)
+}
+
 func (c *FullNodeStruct) StateReadState(ctx context.Context, addr address.Address, tsk types.TipSetKey) (*api.ActorState, error) {
 	return c.Internal.StateReadState(ctx, addr, tsk)
 }
