@@ -503,7 +503,7 @@ func (m *StateModule) StateMultiGetActor(ctx context.Context, actors []address.A
 		}
 		array[index] = info
 	}
-	return actors, nil
+	return array, nil
 }
 
 func (m *StateModule) StateLookupID(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error) {
