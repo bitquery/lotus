@@ -341,6 +341,7 @@ type FullNode interface {
 	// StateReplay replays a given message, assuming it was included in a block in the specified tipset.
 	// If no tipset key is provided, the appropriate tipset is looked up.
 	StateReplay(context.Context, types.TipSetKey, cid.Cid) (*InvocResult, error)
+	StateMultiReplay(context.Context, types.TipSetKey, []cid.Cid) ([]*InvocResult, error)
 	// StateGetActor returns the indicated actor's nonce and balance.
 	StateGetActor(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*types.Actor, error)
 	// StateGetActor returns the indicated actor's nonce and balance.

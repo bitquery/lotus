@@ -452,6 +452,47 @@ func (a *StateAPI) StateReplay(ctx context.Context, tsk types.TipSetKey, mc cid.
 	}, nil
 }
 
+
+func (a *StateAPI) StateMultiReplay(ctx context.Context, tsk types.TipSetKey, mcs []cid.Cid) ([]*api.InvocResult, error) {
+
+	var ts *types.TipSet
+	var err error
+
+	ts, err = a.Chain.LoadTipSet(tsk)
+	if err != nil {
+			return nil, xerrors.Errorf("loading specified tipset %s: %w", tsk, err)
+		}
+
+	array := make([]*api.InvocResult, len(mcs))
+	for index, mc := range mcs {
+		msgToReplay := mc
+
+		m, r, err := a.StateManager.Replay(ctx, ts, msgToReplay)
+		if err != nil {
+			return nil, err
+		}
+
+		var errstr string
+		if r.ActorErr != nil {
+			errstr = r.ActorErr.Error()
+		}
+
+		array[index] = &api.InvocResult{
+			MsgCid:         msgToReplay,
+			Msg:            m,
+			MsgRct:         &r.MessageReceipt,
+			GasCost:        stmgr.MakeMsgGasCost(m, r),
+			ExecutionTrace: r.ExecutionTrace,
+			Error:          errstr,
+			Duration:       r.Duration,
+		}
+
+	}
+
+	return array, nil
+
+}
+
 func stateForTs(ctx context.Context, ts *types.TipSet, cstore *store.ChainStore, smgr *stmgr.StateManager) (*state.StateTree, error) {
 	if ts == nil {
 		ts = cstore.GetHeaviestTipSet()
