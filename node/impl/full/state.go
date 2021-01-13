@@ -485,6 +485,27 @@ func (m *StateModule) StateGetActor(ctx context.Context, actor address.Address, 
 	return state.GetActor(actor)
 }
 
+func (m *StateModule) StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) {
+	ts, err := m.Chain.GetTipSetFromKey(tsk)
+	if err != nil {
+		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
+	}
+	state, err := m.stateForTs(ctx, ts)
+	if err != nil {
+		return nil, xerrors.Errorf("computing tipset state failed: %w", err)
+	}
+
+	array := make([]*types.Actor, len(actors))
+	for index, actor := range actors {
+		info, err := state.GetActor(actor)
+		if err != nil {
+			return nil, xerrors.Errorf("get actor failed for %v: %w", actor, err)
+		}
+		array[index] = info
+	}
+	return actors, nil
+}
+
 func (m *StateModule) StateLookupID(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error) {
 	ts, err := m.Chain.GetTipSetFromKey(tsk)
 	if err != nil {

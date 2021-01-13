@@ -343,6 +343,8 @@ type FullNode interface {
 	StateReplay(context.Context, types.TipSetKey, cid.Cid) (*InvocResult, error)
 	// StateGetActor returns the indicated actor's nonce and balance.
 	StateGetActor(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*types.Actor, error)
+	// StateGetActor returns the indicated actor's nonce and balance.
+	StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error)
 	// StateReadState returns the indicated actor's state.
 	StateReadState(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*ActorState, error)
 	// StateListMessages looks back and returns all messages with a matching to or from address, stopping at the given height.

@@ -200,8 +200,9 @@ type FullNodeStruct struct {
 		StateSectorExpiration              func(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (*miner.SectorExpiration, error)          `perm:"read"`
 		StateSectorPartition               func(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (*miner.SectorLocation, error)            `perm:"read"`
 		StateCall                          func(context.Context, *types.Message, types.TipSetKey) (*api.InvocResult, error)                                    `perm:"read"`
-		StateMultiCall                     func(context.Context, []*types.Message, types.TipSetKey) ([]*api.InvocResult, error)                                 `perm:"read"`
+		StateMultiCall                     func(context.Context, []*types.Message, types.TipSetKey) ([]*api.InvocResult, error)                                `perm:"read"`
 		StateReplay                        func(context.Context, types.TipSetKey, cid.Cid) (*api.InvocResult, error)                                           `perm:"read"`
+		StateMultiGetActor                 func(context.Context, []address.Address, types.TipSetKey) ([]*types.Actor, error)                                   `perm:"read"`
 		StateGetActor                      func(context.Context, address.Address, types.TipSetKey) (*types.Actor, error)                                       `perm:"read"`
 		StateReadState                     func(context.Context, address.Address, types.TipSetKey) (*api.ActorState, error)                                    `perm:"read"`
 		StateWaitMsg                       func(ctx context.Context, cid cid.Cid, confidence uint64) (*api.MsgLookup, error)                                   `perm:"read"`
