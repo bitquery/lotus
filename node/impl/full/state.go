@@ -541,9 +541,10 @@ func (m *StateModule) StateMultiGetActor(ctx context.Context, actors []address.A
 	for index, actor := range actors {
 		info, err := state.GetActor(actor)
 		if err != nil {
-			return nil, xerrors.Errorf("get actor failed for %v: %w", actor, err)
+			array[index] = nil
+		}else {
+			array[index] = info
 		}
-		array[index] = info
 	}
 	return array, nil
 }
