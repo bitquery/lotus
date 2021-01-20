@@ -636,17 +636,23 @@ func (a *StateAPI) StateMultiDecodeParams(ctx context.Context, toAddrs []address
 	for index, toAddr := range toAddrs {
 		act, err := state.GetActor(toAddr)
 		if err != nil {
-			return nil, xerrors.Errorf("getting actor %v failed: %w", toAddr, err)
+			array[index]=nil
+		}else{
+			paramType, err := stmgr.GetParamType(act.Code, methods[index])
+			if err != nil {
+				array[index]=nil
+			}else{
+				if err = paramType.UnmarshalCBOR(bytes.NewReader(params[index])); err != nil {
+					array[index]=nil
+				}else{
+					array[index]=paramType
+				}
+
+			}
+
 		}
 
-		paramType, err := stmgr.GetParamType(act.Code, methods[index])
-		if err != nil {
-			return nil, xerrors.Errorf("getting params type: %w", err)
-		}
-		if err = paramType.UnmarshalCBOR(bytes.NewReader(params[index])); err != nil {
-			return nil, err
-		}
-		array[index]=paramType
+
 	}
 	return array, nil
 }
