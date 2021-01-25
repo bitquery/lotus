@@ -726,18 +726,22 @@ func CheckTotalFIL(ctx context.Context, sm *StateManager, ts *types.TipSet) (abi
 }
 
 func MakeMsgGasCost(msg *types.Message, ret *vm.ApplyRet) api.MsgGasCost {
+	return api.MsgGasCost{
+		Message:            msg.Cid(),
+		GasUsed:            big.NewInt(ret.GasUsed),
+		BaseFeeBurn:        ret.GasCosts.BaseFeeBurn,
+		OverEstimationBurn: ret.GasCosts.OverEstimationBurn,
+		MinerPenalty:       ret.GasCosts.MinerPenalty,
+		MinerTip:           ret.GasCosts.MinerTip,
+		Refund:             ret.GasCosts.Refund,
+		TotalCost:          big.Sub(msg.RequiredFunds(), ret.GasCosts.Refund),
+	}
+}
+
+func MakeMsgGasCostWithCheck(msg *types.Message, ret *vm.ApplyRet) api.MsgGasCost {
 
 	if ret.GasCosts != nil {
-		return api.MsgGasCost{
-			Message:            msg.Cid(),
-			GasUsed:            big.NewInt(ret.GasUsed),
-			BaseFeeBurn:        ret.GasCosts.BaseFeeBurn,
-			OverEstimationBurn: ret.GasCosts.OverEstimationBurn,
-			MinerPenalty:       ret.GasCosts.MinerPenalty,
-			MinerTip:           ret.GasCosts.MinerTip,
-			Refund:             ret.GasCosts.Refund,
-			TotalCost:          big.Sub(msg.RequiredFunds(), ret.GasCosts.Refund),
-		}
+		return MakeMsgGasCost(msg, ret)
 	} else {
 		return api.MsgGasCost{
 			Message:            msg.Cid(),

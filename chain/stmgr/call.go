@@ -276,7 +276,7 @@ func (sm *StateManager) PlayAllMessagesInTipset(ctx context.Context, ts *types.T
 			MsgCid:         c,
 			Msg:            m,
 			MsgRct:         &ret.MessageReceipt,
-			GasCost:        MakeMsgGasCost(m, ret),
+			GasCost:        MakeMsgGasCostWithCheck(m, ret),
 			ExecutionTrace: ret.ExecutionTrace,
 			Error:          "",
 			Duration:       ret.Duration,
