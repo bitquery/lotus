@@ -729,7 +729,9 @@ func MakeMsgGasCost(msg *types.Message, ret *vm.ApplyRet) api.MsgGasCost {
 	var totalCost = big.NewInt(0)
 
 	if ret.GasCosts != nil {
-		totalCost = big.Sub(msg.RequiredFunds(), ret.GasCosts.Refund)
+		var required = msg.RequiredFunds()
+		var refund = ret.GasCosts.Refund
+		totalCost = big.Sub(required, refund)
 	}
 
 	return api.MsgGasCost{
