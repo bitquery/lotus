@@ -272,15 +272,17 @@ func (sm *StateManager) PlayAllMessagesInTipset(ctx context.Context, ts *types.T
 
 	_, _, err := sm.computeTipSetState(ctx, ts, func(c cid.Cid, m *types.Message, ret *vm.ApplyRet) error {
 
-		array = append(array, &api.InvocResult{
-			MsgCid:         c,
-			Msg:            m,
-			MsgRct:         &ret.MessageReceipt,
-			GasCost:        MakeMsgGasCost(m, ret),
-			ExecutionTrace: ret.ExecutionTrace,
-			Error:          "",
-			Duration:       ret.Duration,
-		})
+		if m != nil && ret != nil {
+			array = append(array, &api.InvocResult{
+				MsgCid:         c,
+				Msg:            m,
+				MsgRct:         &ret.MessageReceipt,
+				GasCost:        MakeMsgGasCost(m, ret),
+				ExecutionTrace: ret.ExecutionTrace,
+				Error:          "",
+				Duration:       ret.Duration,
+			})
+		}
 
 		return nil
 	})
