@@ -272,7 +272,7 @@ func (sm *StateManager) PlayAllMessagesInTipset(ctx context.Context, ts *types.T
 
 	_, _, err := sm.computeTipSetState(ctx, ts, func(c cid.Cid, m *types.Message, ret *vm.ApplyRet) error {
 
-		if m != nil && ret != nil {
+		if len(array) < 5 {
 			array = append(array, &api.InvocResult{
 				MsgCid:         c,
 				Msg:            m,
