@@ -265,3 +265,29 @@ func (sm *StateManager) Replay(ctx context.Context, ts *types.TipSet, mcid cid.C
 
 	return outm, outr, nil
 }
+
+func (sm *StateManager) PlayAllMessagesInTipset(ctx context.Context, ts *types.TipSet) ([]*api.InvocResult, error) {
+
+	array := make([]*api.InvocResult, 0)
+
+	_, _, err := sm.computeTipSetState(ctx, ts, func(c cid.Cid, m *types.Message, ret *vm.ApplyRet) error {
+
+		array = append(array, &api.InvocResult{
+			MsgCid:         c,
+			Msg:            m,
+			MsgRct:         &ret.MessageReceipt,
+			GasCost:        MakeMsgGasCost(m, ret),
+			ExecutionTrace: ret.ExecutionTrace,
+			Error:          "",
+			Duration:       ret.Duration,
+		})
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return array, nil
+
+}

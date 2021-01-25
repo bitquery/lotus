@@ -372,7 +372,7 @@ func (a *StateAPI) StateCall(ctx context.Context, msg *types.Message, tsk types.
 	return res, err
 }
 
-func (a *StateAPI) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ( []*api.InvocResult, error) {
+func (a *StateAPI) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
 	base_ts, err := a.Chain.GetTipSetFromKey(tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
@@ -452,44 +452,17 @@ func (a *StateAPI) StateReplay(ctx context.Context, tsk types.TipSetKey, mc cid.
 	}, nil
 }
 
-
-func (a *StateAPI) StateMultiReplay(ctx context.Context, tsk types.TipSetKey, mcs []cid.Cid) ([]*api.InvocResult, error) {
+func (a *StateAPI) StateMultiReplay(ctx context.Context, tsk types.TipSetKey) ([]*api.InvocResult, error) {
 
 	var ts *types.TipSet
 	var err error
 
 	ts, err = a.Chain.LoadTipSet(tsk)
 	if err != nil {
-			return nil, xerrors.Errorf("loading specified tipset %s: %w", tsk, err)
-		}
-
-	array := make([]*api.InvocResult, len(mcs))
-	for index, mc := range mcs {
-		msgToReplay := mc
-
-		m, r, err := a.StateManager.Replay(ctx, ts, msgToReplay)
-		if err != nil {
-			return nil, err
-		}
-
-		var errstr string
-		if r.ActorErr != nil {
-			errstr = r.ActorErr.Error()
-		}
-
-		array[index] = &api.InvocResult{
-			MsgCid:         msgToReplay,
-			Msg:            m,
-			MsgRct:         &r.MessageReceipt,
-			GasCost:        stmgr.MakeMsgGasCost(m, r),
-			ExecutionTrace: r.ExecutionTrace,
-			Error:          errstr,
-			Duration:       r.Duration,
-		}
-
+		return nil, xerrors.Errorf("loading specified tipset %s: %w", tsk, err)
 	}
 
-	return array, nil
+	return a.StateManager.PlayAllMessagesInTipset(ctx, ts)
 
 }
 
@@ -542,7 +515,7 @@ func (m *StateModule) StateMultiGetActor(ctx context.Context, actors []address.A
 		info, err := state.GetActor(actor)
 		if err != nil {
 			array[index] = nil
-		}else {
+		} else {
 			array[index] = info
 		}
 	}
@@ -629,29 +602,28 @@ func (a *StateAPI) StateMultiDecodeParams(ctx context.Context, toAddrs []address
 	}
 
 	if (len(toAddrs) != len(methods)) || (len(toAddrs) != len(params)) {
-		return nil, xerrors.Errorf("Array sizes are not equal: toAddrs: %v methods: %v params: %v ", len(toAddrs) , len(methods), len(params))
+		return nil, xerrors.Errorf("Array sizes are not equal: toAddrs: %v methods: %v params: %v ", len(toAddrs), len(methods), len(params))
 	}
 
 	array := make([]interface{}, len(toAddrs))
 	for index, toAddr := range toAddrs {
 		act, err := state.GetActor(toAddr)
 		if err != nil {
-			array[index]=nil
-		}else{
+			array[index] = nil
+		} else {
 			paramType, err := stmgr.GetParamType(act.Code, methods[index])
 			if err != nil {
-				array[index]=nil
-			}else{
+				array[index] = nil
+			} else {
 				if err = paramType.UnmarshalCBOR(bytes.NewReader(params[index])); err != nil {
-					array[index]=nil
-				}else{
-					array[index]=paramType
+					array[index] = nil
+				} else {
+					array[index] = paramType
 				}
 
 			}
 
 		}
-
 
 	}
 	return array, nil
