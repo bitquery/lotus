@@ -726,22 +726,29 @@ func CheckTotalFIL(ctx context.Context, sm *StateManager, ts *types.TipSet) (abi
 }
 
 func MakeMsgGasCost(msg *types.Message, ret *vm.ApplyRet) api.MsgGasCost {
-	var totalCost = big.NewInt(0)
 
 	if ret.GasCosts != nil {
-		var required = msg.RequiredFunds()
-		var refund = ret.GasCosts.Refund
-		totalCost = big.Sub(required, refund)
+		return api.MsgGasCost{
+			Message:            msg.Cid(),
+			GasUsed:            big.NewInt(ret.GasUsed),
+			BaseFeeBurn:        ret.GasCosts.BaseFeeBurn,
+			OverEstimationBurn: ret.GasCosts.OverEstimationBurn,
+			MinerPenalty:       ret.GasCosts.MinerPenalty,
+			MinerTip:           ret.GasCosts.MinerTip,
+			Refund:             ret.GasCosts.Refund,
+			TotalCost:          big.Sub(msg.RequiredFunds(), ret.GasCosts.Refund),
+		}
+	} else {
+		return api.MsgGasCost{
+			Message:            msg.Cid(),
+			GasUsed:            big.NewInt(ret.GasUsed),
+			BaseFeeBurn:        big.NewInt(0),
+			OverEstimationBurn: big.NewInt(0),
+			MinerPenalty:       big.NewInt(0),
+			MinerTip:           big.NewInt(0),
+			Refund:             big.NewInt(0),
+			TotalCost:          big.NewInt(0),
+		}
 	}
 
-	return api.MsgGasCost{
-		Message:            msg.Cid(),
-		GasUsed:            big.NewInt(ret.GasUsed),
-		BaseFeeBurn:        ret.GasCosts.BaseFeeBurn,
-		OverEstimationBurn: ret.GasCosts.OverEstimationBurn,
-		MinerPenalty:       ret.GasCosts.MinerPenalty,
-		MinerTip:           ret.GasCosts.MinerTip,
-		Refund:             ret.GasCosts.Refund,
-		TotalCost:          totalCost,
-	}
 }
