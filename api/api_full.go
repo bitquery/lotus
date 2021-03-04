@@ -340,17 +340,24 @@ type FullNode interface {
 	// message is not applied on-top-of the messages in the passed-in
 	// tipset.
 	StateCall(context.Context, *types.Message, types.TipSetKey) (*InvocResult, error)
+	// StateCall runs the given messages and returns its result without any persisted changes.
+	StateMultiCall(context.Context, []*types.Message, types.TipSetKey) ([]*InvocResult, error)
 	// StateReplay replays a given message, assuming it was included in a block in the specified tipset.
 	// If no tipset key is provided, the appropriate tipset is looked up.
 	StateReplay(context.Context, types.TipSetKey, cid.Cid) (*InvocResult, error)
+	StateMultiReplay(context.Context, types.TipSetKey) ([]*InvocResult, error)
 	// StateGetActor returns the indicated actor's nonce and balance.
 	StateGetActor(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*types.Actor, error)
+	// StateGetActor returns the indicated actor's nonce and balance.
+	StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error)
 	// StateReadState returns the indicated actor's state.
 	StateReadState(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*ActorState, error)
 	// StateListMessages looks back and returns all messages with a matching to or from address, stopping at the given height.
 	StateListMessages(ctx context.Context, match *MessageMatch, tsk types.TipSetKey, toht abi.ChainEpoch) ([]cid.Cid, error)
 	// StateDecodeParams attempts to decode the provided params, based on the recipient actor address and method number.
 	StateDecodeParams(ctx context.Context, toAddr address.Address, method abi.MethodNum, params []byte, tsk types.TipSetKey) (interface{}, error)
+	// StateDecodeParams attempts to decode the provided params, based on the recipient actor address and method number.
+	StateMultiDecodeParams(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error)
 
 	// StateNetworkName returns the name of the network the node is synced to
 	StateNetworkName(context.Context) (dtypes.NetworkName, error)

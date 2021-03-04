@@ -725,3 +725,22 @@ func MakeMsgGasCost(msg *types.Message, ret *vm.ApplyRet) api.MsgGasCost {
 		TotalCost:          big.Sub(msg.RequiredFunds(), ret.GasCosts.Refund),
 	}
 }
+
+func MakeMsgGasCostWithCheck(msg *types.Message, ret *vm.ApplyRet) api.MsgGasCost {
+
+	if ret.GasCosts != nil {
+		return MakeMsgGasCost(msg, ret)
+	} else {
+		return api.MsgGasCost{
+			Message:            msg.Cid(),
+			GasUsed:            big.NewInt(ret.GasUsed),
+			BaseFeeBurn:        big.NewInt(0),
+			OverEstimationBurn: big.NewInt(0),
+			MinerPenalty:       big.NewInt(0),
+			MinerTip:           big.NewInt(0),
+			Refund:             big.NewInt(0),
+			TotalCost:          big.NewInt(0),
+		}
+	}
+
+}

@@ -200,7 +200,10 @@ type FullNodeStruct struct {
 		StateSectorExpiration              func(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (*miner.SectorExpiration, error)          `perm:"read"`
 		StateSectorPartition               func(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (*miner.SectorLocation, error)            `perm:"read"`
 		StateCall                          func(context.Context, *types.Message, types.TipSetKey) (*api.InvocResult, error)                                    `perm:"read"`
+		StateMultiCall                     func(context.Context, []*types.Message, types.TipSetKey) ([]*api.InvocResult, error)                                `perm:"read"`
 		StateReplay                        func(context.Context, types.TipSetKey, cid.Cid) (*api.InvocResult, error)                                           `perm:"read"`
+		StateMultiReplay                   func(context.Context, types.TipSetKey) ([]*api.InvocResult, error)                                                  `perm:"read"`
+		StateMultiGetActor                 func(context.Context, []address.Address, types.TipSetKey) ([]*types.Actor, error)                                   `perm:"read"`
 		StateGetActor                      func(context.Context, address.Address, types.TipSetKey) (*types.Actor, error)                                       `perm:"read"`
 		StateReadState                     func(context.Context, address.Address, types.TipSetKey) (*api.ActorState, error)                                    `perm:"read"`
 		StateWaitMsg                       func(ctx context.Context, cid cid.Cid, confidence uint64) (*api.MsgLookup, error)                                   `perm:"read"`
@@ -220,6 +223,7 @@ type FullNodeStruct struct {
 		StateMinerSectorCount              func(context.Context, address.Address, types.TipSetKey) (api.MinerSectors, error)                                   `perm:"read"`
 		StateListMessages                  func(ctx context.Context, match *api.MessageMatch, tsk types.TipSetKey, toht abi.ChainEpoch) ([]cid.Cid, error)     `perm:"read"`
 		StateDecodeParams                  func(context.Context, address.Address, abi.MethodNum, []byte, types.TipSetKey) (interface{}, error)                 `perm:"read"`
+		StateMultiDecodeParams             func(context.Context, []address.Address, []abi.MethodNum, [][]byte, types.TipSetKey) ([]interface{}, error)         `perm:"read"`
 		StateCompute                       func(context.Context, abi.ChainEpoch, []*types.Message, types.TipSetKey) (*api.ComputeStateOutput, error)           `perm:"read"`
 		StateVerifierStatus                func(context.Context, address.Address, types.TipSetKey) (*abi.StoragePower, error)                                  `perm:"read"`
 		StateVerifiedClientStatus          func(context.Context, address.Address, types.TipSetKey) (*abi.StoragePower, error)                                  `perm:"read"`
@@ -996,12 +1000,24 @@ func (c *FullNodeStruct) StateCall(ctx context.Context, msg *types.Message, tsk 
 	return c.Internal.StateCall(ctx, msg, tsk)
 }
 
+func (c *FullNodeStruct) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
+	return c.Internal.StateMultiCall(ctx, msgs, tsk)
+}
+
 func (c *FullNodeStruct) StateReplay(ctx context.Context, tsk types.TipSetKey, mc cid.Cid) (*api.InvocResult, error) {
 	return c.Internal.StateReplay(ctx, tsk, mc)
 }
 
+func (c *FullNodeStruct) StateMultiReplay(ctx context.Context, tsk types.TipSetKey) ([]*api.InvocResult, error) {
+	return c.Internal.StateMultiReplay(ctx, tsk)
+}
+
 func (c *FullNodeStruct) StateGetActor(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*types.Actor, error) {
 	return c.Internal.StateGetActor(ctx, actor, tsk)
+}
+
+func (c *FullNodeStruct) StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) {
+	return c.Internal.StateMultiGetActor(ctx, actors, tsk)
 }
 
 func (c *FullNodeStruct) StateReadState(ctx context.Context, addr address.Address, tsk types.TipSetKey) (*api.ActorState, error) {
@@ -1070,6 +1086,10 @@ func (c *FullNodeStruct) StateListMessages(ctx context.Context, match *api.Messa
 
 func (c *FullNodeStruct) StateDecodeParams(ctx context.Context, toAddr address.Address, method abi.MethodNum, params []byte, tsk types.TipSetKey) (interface{}, error) {
 	return c.Internal.StateDecodeParams(ctx, toAddr, method, params, tsk)
+}
+
+func (c *FullNodeStruct) StateMultiDecodeParams(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error) {
+	return c.Internal.StateMultiDecodeParams(ctx, toAddrs, methods, params, tsk)
 }
 
 func (c *FullNodeStruct) StateCompute(ctx context.Context, height abi.ChainEpoch, msgs []*types.Message, tsk types.TipSetKey) (*api.ComputeStateOutput, error) {
