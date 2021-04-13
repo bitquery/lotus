@@ -478,8 +478,7 @@ func stateForTs(ctx context.Context, ts *types.TipSet, cstore *store.ChainStore,
 		return nil, err
 	}
 
-	buf := bufbstore.NewBufferedBstore(cstore.StateBlockstore())
-	cst := cbor.NewCborStore(buf)
+	cst := cbor.NewCborStore(cstore.StateBlockstore())
 	return state.LoadStateTree(cst, st)
 }
 func (a *StateAPI) stateForTs(ctx context.Context, ts *types.TipSet) (*state.StateTree, error) {
