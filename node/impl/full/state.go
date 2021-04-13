@@ -5,6 +5,7 @@ import (
 	"context"
 	"strconv"
 
+	cbor "github.com/ipfs/go-ipld-cbor"
 	cid "github.com/ipfs/go-cid"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
