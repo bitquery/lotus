@@ -4,7 +4,6 @@ package v0api
 
 import (
 	"context"
-	cid "github.com/ipfs/go-cid/_rsrch/cidiface"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
