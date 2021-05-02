@@ -381,7 +381,7 @@ type FullNode interface {
 	// message is not applied on-top-of the messages in the passed-in
 	// tipset.
 	StateCall(context.Context, *types.Message, types.TipSetKey) (*InvocResult, error) //perm:read
-	StateMultiCall(context.Context, []*types.Message, types.TipSetKey) ([]*InvocResult, error)
+	StateMultiCall(context.Context, []*types.Message, types.TipSetKey) ([]*InvocResult, error) //perm:read
 
 	// StateReplay replays a given message, assuming it was included in a block in the specified tipset.
 	//
