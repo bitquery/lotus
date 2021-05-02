@@ -243,6 +243,8 @@ type FullNodeStruct struct {
 
 		StateCall func(p0 context.Context, p1 *types.Message, p2 types.TipSetKey) (*api.InvocResult, error) `perm:"read"`
 
+		StateMultiCall func(context.Context, []*types.Message, types.TipSetKey) ([]*InvocResult, error)  `perm:"read"`
+
 		StateChangedActors func(p0 context.Context, p1 cid.Cid, p2 cid.Cid) (map[string]types.Actor, error) `perm:"read"`
 
 		StateCirculatingSupply func(p0 context.Context, p1 types.TipSetKey) (abi.TokenAmount, error) `perm:"read"`
@@ -253,7 +255,11 @@ type FullNodeStruct struct {
 
 		StateDecodeParams func(p0 context.Context, p1 address.Address, p2 abi.MethodNum, p3 []byte, p4 types.TipSetKey) (interface{}, error) `perm:"read"`
 
+		StateMultiDecodeParams func(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error) `perm:"read"`
+
 		StateGetActor func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) `perm:"read"`
+
+		StateMultiGetActor func(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) `perm:"read"`
 
 		StateGetReceipt func(p0 context.Context, p1 cid.Cid, p2 types.TipSetKey) (*types.MessageReceipt, error) `perm:"read"`
 
@@ -308,6 +314,8 @@ type FullNodeStruct struct {
 		StateReadState func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*api.ActorState, error) `perm:"read"`
 
 		StateReplay func(p0 context.Context, p1 types.TipSetKey, p2 cid.Cid) (*api.InvocResult, error) `perm:"read"`
+
+		StateMultiReplay func(context.Context, types.TipSetKey) ([]*InvocResult, error) `perm:"read"`
 
 		StateSearchMsg func(p0 context.Context, p1 cid.Cid) (*api.MsgLookup, error) `perm:"read"`
 
@@ -416,6 +424,8 @@ type GatewayStruct struct {
 		StateDealProviderCollateralBounds func(p0 context.Context, p1 abi.PaddedPieceSize, p2 bool, p3 types.TipSetKey) (api.DealCollateralBounds, error) ``
 
 		StateGetActor func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) ``
+
+		StateMultiGetActor func(p0 context.Context, p1 []address.Address, p2 types.TipSetKey) ([]*types.Actor, error) ``
 
 		StateGetReceipt func(p0 context.Context, p1 cid.Cid, p2 types.TipSetKey) (*types.MessageReceipt, error) ``
 
@@ -1298,6 +1308,14 @@ func (s *FullNodeStub) StateCall(p0 context.Context, p1 *types.Message, p2 types
 	return nil, xerrors.New("method not supported")
 }
 
+func (c *FullNodeStruct) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
+	return c.Internal.StateMultiCall(ctx, msgs, tsk)
+}
+
+func (s *FullNodeStub) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
+	return nil, xerrors.New("method not supported")
+}
+
 func (s *FullNodeStruct) StateChangedActors(p0 context.Context, p1 cid.Cid, p2 cid.Cid) (map[string]types.Actor, error) {
 	return s.Internal.StateChangedActors(p0, p1, p2)
 }
@@ -1338,12 +1356,20 @@ func (s *FullNodeStub) StateDecodeParams(p0 context.Context, p1 address.Address,
 	return nil, xerrors.New("method not supported")
 }
 
+func (s *FullNodeStruct) StateMultiDecodeParams(p0 context.Context, p1 []address.Address, p2 []abi.MethodNum, p3 [][]byte, p4 types.TipSetKey) ([]interface{}, error) {
+	return s.Internal.StateMultiDecodeParams(p0, p1, p2, p3, p4)
+}
+
 func (s *FullNodeStruct) StateGetActor(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) {
 	return s.Internal.StateGetActor(p0, p1, p2)
 }
 
 func (s *FullNodeStub) StateGetActor(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) {
 	return nil, xerrors.New("method not supported")
+}
+
+func (s *FullNodeStruct) StateMultiGetActor(p0 context.Context, p1 []address.Address, p2 types.TipSetKey) ([]*types.Actor, error) {
+	return s.Internal.StateMultiGetActor(p0, p1, p2)
 }
 
 func (s *FullNodeStruct) StateGetReceipt(p0 context.Context, p1 cid.Cid, p2 types.TipSetKey) (*types.MessageReceipt, error) {
@@ -1560,6 +1586,10 @@ func (s *FullNodeStruct) StateReplay(p0 context.Context, p1 types.TipSetKey, p2 
 
 func (s *FullNodeStub) StateReplay(p0 context.Context, p1 types.TipSetKey, p2 cid.Cid) (*api.InvocResult, error) {
 	return nil, xerrors.New("method not supported")
+}
+
+func (s *FullNodeStruct) StateMultiReplay(p0 context.Context, p1 types.TipSetKey) ([]*api.InvocResult, error) {
+	return s.Internal.StateMultiReplay(p0, p1)
 }
 
 func (s *FullNodeStruct) StateSearchMsg(p0 context.Context, p1 cid.Cid) (*api.MsgLookup, error) {
@@ -1960,6 +1990,10 @@ func (s *GatewayStruct) StateGetActor(p0 context.Context, p1 address.Address, p2
 
 func (s *GatewayStub) StateGetActor(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) {
 	return nil, xerrors.New("method not supported")
+}
+
+func (s *GatewayStruct) StateMultiGetActor(p0 context.Context, p1 []address.Address, p2 types.TipSetKey) ([]*types.Actor, error) {
+	return s.Internal.StateMultiGetActor(p0, p1, p2)
 }
 
 func (s *GatewayStruct) StateGetReceipt(p0 context.Context, p1 cid.Cid, p2 types.TipSetKey) (*types.MessageReceipt, error) {
