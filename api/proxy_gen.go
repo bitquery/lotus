@@ -392,6 +392,8 @@ type FullNodeStruct struct {
 
 		StateReplay func(p0 context.Context, p1 types.TipSetKey, p2 cid.Cid) (*InvocResult, error) `perm:"read"`
 
+		StateMultiReplay func(context.Context, types.TipSetKey) ([]*InvocResult, error) `perm:"read"`
+
 		StateSearchMsg func(p0 context.Context, p1 types.TipSetKey, p2 cid.Cid, p3 abi.ChainEpoch, p4 bool) (*MsgLookup, error) `perm:"read"`
 
 		StateSectorExpiration func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorExpiration, error) `perm:"read"`
@@ -2128,6 +2130,10 @@ func (s *FullNodeStruct) StateReplay(p0 context.Context, p1 types.TipSetKey, p2 
 
 func (s *FullNodeStub) StateReplay(p0 context.Context, p1 types.TipSetKey, p2 cid.Cid) (*InvocResult, error) {
 	return nil, xerrors.New("method not supported")
+}
+
+func (s *FullNodeStruct) StateMultiReplay(p0 context.Context, p1 types.TipSetKey) ([]*InvocResult, error) {
+	return s.Internal.StateMultiReplay(p0, p1)
 }
 
 func (s *FullNodeStruct) StateSearchMsg(p0 context.Context, p1 types.TipSetKey, p2 cid.Cid, p3 abi.ChainEpoch, p4 bool) (*MsgLookup, error) {
