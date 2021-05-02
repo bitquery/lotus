@@ -1931,12 +1931,12 @@ func (s *FullNodeStruct) StateGetActor(p0 context.Context, p1 address.Address, p
 	return s.Internal.StateGetActor(p0, p1, p2)
 }
 
-func (s *FullNodeStruct) StateMiltiGetActor(p0 context.Context, p1 []address.Address, p2 types.TipSetKey) ([]*types.Actor, error) {
-	return s.Internal.StateMiltiGetActor(p0, p1, p2)
-}
-
 func (s *FullNodeStub) StateGetActor(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) {
 	return nil, xerrors.New("method not supported")
+}
+
+func (s *FullNodeStruct) StateMultiGetActor(p0 context.Context, p1 []address.Address, p2 types.TipSetKey) ([]*types.Actor, error) {
+	return s.Internal.StateMultiGetActor(p0, p1, p2)
 }
 
 func (s *FullNodeStruct) StateListActors(p0 context.Context, p1 types.TipSetKey) ([]address.Address, error) {
