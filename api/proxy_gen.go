@@ -1866,7 +1866,7 @@ func (s *FullNodeStruct) StateCall(p0 context.Context, p1 *types.Message, p2 typ
 	return s.Internal.StateCall(p0, p1, p2)
 }
 
-func (c *FullNodeStruct) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
+func (c *FullNodeStruct) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*InvocResult, error) {
 	return c.Internal.StateMultiCall(ctx, msgs, tsk)
 }
 
