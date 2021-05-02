@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	cid "github.com/ipfs/go-cid/_rsrch/cidiface"
 	"io"
 	"time"
 
@@ -324,6 +325,8 @@ type FullNodeStruct struct {
 		StateAllMinerFaults func(p0 context.Context, p1 abi.ChainEpoch, p2 types.TipSetKey) ([]*Fault, error) `perm:"read"`
 
 		StateCall func(p0 context.Context, p1 *types.Message, p2 types.TipSetKey) (*InvocResult, error) `perm:"read"`
+
+		StateMultiCall func(context.Context, []*types.Message, types.TipSetKey) ([]*InvocResult, error) `perm:"read"`
 
 		StateChangedActors func(p0 context.Context, p1 cid.Cid, p2 cid.Cid) (map[string]types.Actor, error) `perm:"read"`
 
