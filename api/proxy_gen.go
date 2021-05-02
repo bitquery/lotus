@@ -340,6 +340,8 @@ type FullNodeStruct struct {
 
 		StateGetActor func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) `perm:"read"`
 
+		StateMultiGetActor func(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) `perm:"read"`
+
 		StateListActors func(p0 context.Context, p1 types.TipSetKey) ([]address.Address, error) `perm:"read"`
 
 		StateListMessages func(p0 context.Context, p1 *MessageMatch, p2 types.TipSetKey, p3 abi.ChainEpoch) ([]cid.Cid, error) `perm:"read"`
@@ -2514,6 +2516,10 @@ func (s *GatewayStub) StateDealProviderCollateralBounds(p0 context.Context, p1 a
 
 func (s *GatewayStruct) StateGetActor(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) {
 	return s.Internal.StateGetActor(p0, p1, p2)
+}
+
+func (s *GatewayStruct) StateMultiGetActor(p0 context.Context, p1 []address.Address, p2 types.TipSetKey) ([]*types.Actor, error) {
+	return s.Internal.StateMultiGetActor(p0, p1, p2)
 }
 
 func (s *GatewayStub) StateGetActor(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) {
