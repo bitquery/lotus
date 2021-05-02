@@ -338,6 +338,8 @@ type FullNodeStruct struct {
 
 		StateDecodeParams func(p0 context.Context, p1 address.Address, p2 abi.MethodNum, p3 []byte, p4 types.TipSetKey) (interface{}, error) `perm:"read"`
 
+		StateMultiDecodeParams func(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error) `perm:"read"`
+
 		StateGetActor func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) `perm:"read"`
 
 		StateMultiGetActor func(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) `perm:"read"`
@@ -1915,6 +1917,11 @@ func (s *FullNodeStub) StateDealProviderCollateralBounds(p0 context.Context, p1 
 func (s *FullNodeStruct) StateDecodeParams(p0 context.Context, p1 address.Address, p2 abi.MethodNum, p3 []byte, p4 types.TipSetKey) (interface{}, error) {
 	return s.Internal.StateDecodeParams(p0, p1, p2, p3, p4)
 }
+
+func (s *FullNodeStruct) StateMultiDecodeParams(p0 context.Context, p1 []address.Address, p2 []abi.MethodNum, p3 [][]byte, p4 types.TipSetKey) ([]interface{}, error) {
+	return s.Internal.StateMultiDecodeParams(p0, p1, p2, p3, p4)
+}
+
 
 func (s *FullNodeStub) StateDecodeParams(p0 context.Context, p1 address.Address, p2 abi.MethodNum, p3 []byte, p4 types.TipSetKey) (interface{}, error) {
 	return nil, xerrors.New("method not supported")
