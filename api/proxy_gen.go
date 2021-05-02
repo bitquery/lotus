@@ -326,6 +326,8 @@ type FullNodeStruct struct {
 
 		StateCall func(p0 context.Context, p1 *types.Message, p2 types.TipSetKey) (*InvocResult, error) `perm:"read"`
 
+		StateMultiCall func(context.Context, []*types.Message, types.TipSetKey) ([]*InvocResult, error)  `perm:"read"`
+
 		StateChangedActors func(p0 context.Context, p1 cid.Cid, p2 cid.Cid) (map[string]types.Actor, error) `perm:"read"`
 
 		StateCirculatingSupply func(p0 context.Context, p1 types.TipSetKey) (abi.TokenAmount, error) `perm:"read"`
@@ -1862,6 +1864,10 @@ func (s *FullNodeStub) StateAllMinerFaults(p0 context.Context, p1 abi.ChainEpoch
 
 func (s *FullNodeStruct) StateCall(p0 context.Context, p1 *types.Message, p2 types.TipSetKey) (*InvocResult, error) {
 	return s.Internal.StateCall(p0, p1, p2)
+}
+
+func (c *FullNodeStruct) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
+	return c.Internal.StateMultiCall(ctx, msgs, tsk)
 }
 
 func (s *FullNodeStub) StateCall(p0 context.Context, p1 *types.Message, p2 types.TipSetKey) (*InvocResult, error) {
