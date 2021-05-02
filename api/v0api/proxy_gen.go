@@ -4,6 +4,7 @@ package v0api
 
 import (
 	"context"
+	cid "github.com/ipfs/go-cid/_rsrch/cidiface"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
@@ -243,7 +244,7 @@ type FullNodeStruct struct {
 
 		StateCall func(p0 context.Context, p1 *types.Message, p2 types.TipSetKey) (*api.InvocResult, error) `perm:"read"`
 
-		StateMultiCall func(context.Context, []*types.Message, types.TipSetKey) ([]*InvocResult, error)  `perm:"read"`
+		StateMultiCall func(context.Context, []*types.Message, types.TipSetKey) ([]*api.InvocResult, error)  `perm:"read"`
 
 		StateChangedActors func(p0 context.Context, p1 cid.Cid, p2 cid.Cid) (map[string]types.Actor, error) `perm:"read"`
 
@@ -315,7 +316,7 @@ type FullNodeStruct struct {
 
 		StateReplay func(p0 context.Context, p1 types.TipSetKey, p2 cid.Cid) (*api.InvocResult, error) `perm:"read"`
 
-		StateMultiReplay func(context.Context, types.TipSetKey) ([]*InvocResult, error) `perm:"read"`
+		StateMultiReplay func(context.Context, types.TipSetKey) ([]*api.InvocResult, error) `perm:"read"`
 
 		StateSearchMsg func(p0 context.Context, p1 cid.Cid) (*api.MsgLookup, error) `perm:"read"`
 
