@@ -2,6 +2,7 @@ package v0api
 
 import (
 	"context"
+	cid "github.com/ipfs/go-cid/_rsrch/cidiface"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
@@ -384,15 +385,17 @@ type FullNode interface {
 	// different signature, but with all other parameters matching (source/destination,
 	// nonce, params, etc.)
 	StateReplay(context.Context, types.TipSetKey, cid.Cid) (*api.InvocResult, error) //perm:read
+	StateMultiReplay(context.Context, types.TipSetKey) ([]*InvocResult, error) //perm:read
 	// StateGetActor returns the indicated actor's nonce and balance.
 	StateGetActor(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*types.Actor, error) //perm:read
+	StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) //perm:rea
 	// StateReadState returns the indicated actor's state.
 	StateReadState(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*api.ActorState, error) //perm:read
 	// StateListMessages looks back and returns all messages with a matching to or from address, stopping at the given height.
 	StateListMessages(ctx context.Context, match *api.MessageMatch, tsk types.TipSetKey, toht abi.ChainEpoch) ([]cid.Cid, error) //perm:read
 	// StateDecodeParams attempts to decode the provided params, based on the recipient actor address and method number.
 	StateDecodeParams(ctx context.Context, toAddr address.Address, method abi.MethodNum, params []byte, tsk types.TipSetKey) (interface{}, error) //perm:read
-
+	StateMultiDecodeParams(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error) //perm:read
 	// StateNetworkName returns the name of the network the node is synced to
 	StateNetworkName(context.Context) (dtypes.NetworkName, error) //perm:read
 	// StateMinerSectors returns info about the given miner's sectors. If the filter bitfield is nil, all sectors are included.

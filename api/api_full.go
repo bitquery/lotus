@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	cid "github.com/ipfs/go-cid/_rsrch/cidiface"
 	"time"
 
 
@@ -400,11 +401,11 @@ type FullNode interface {
 	// different signature, but with all other parameters matching (source/destination,
 	// nonce, params, etc.)
 	StateReplay(context.Context, types.TipSetKey, cid.Cid) (*InvocResult, error) //perm:read
-	StateMultiReplay(context.Context, types.TipSetKey) ([]*InvocResult, error)
+	StateMultiReplay(context.Context, types.TipSetKey) ([]*InvocResult, error) //perm:read
 
 	// StateGetActor returns the indicated actor's nonce and balance.
 	StateGetActor(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*types.Actor, error) //perm:read
-	StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error)
+	StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) //perm:read
 
 	// StateReadState returns the indicated actor's state.
 	StateReadState(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*ActorState, error) //perm:read
@@ -412,7 +413,7 @@ type FullNode interface {
 	StateListMessages(ctx context.Context, match *MessageMatch, tsk types.TipSetKey, toht abi.ChainEpoch) ([]cid.Cid, error) //perm:read
 	// StateDecodeParams attempts to decode the provided params, based on the recipient actor address and method number.
 	StateDecodeParams(ctx context.Context, toAddr address.Address, method abi.MethodNum, params []byte, tsk types.TipSetKey) (interface{}, error) //perm:read
-	StateMultiDecodeParams(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error)
+	StateMultiDecodeParams(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error) //perm:read
 
 	// StateNetworkName returns the name of the network the node is synced to
 	StateNetworkName(context.Context) (dtypes.NetworkName, error) //perm:read
