@@ -58,6 +58,9 @@ func TestAPIDealFlow(t *testing.T) {
 	t.Run("TestPublishDealsBatching", func(t *testing.T) {
 		test.TestPublishDealsBatching(t, builder.MockSbBuilder, blockTime, dealStartEpoch)
 	})
+	t.Run("TestBatchDealInput", func(t *testing.T) {
+		test.TestBatchDealInput(t, builder.MockSbBuilder, blockTime, dealStartEpoch)
+	})
 }
 
 func TestAPIDealFlowReal(t *testing.T) {
@@ -228,4 +231,17 @@ func TestWindowPostDisputeFails(t *testing.T) {
 	logging.SetLogLevel("storageminer", "ERROR")
 
 	test.TestWindowPostDisputeFails(t, builder.MockSbBuilder, 2*time.Millisecond)
+}
+
+func TestDeadlineToggling(t *testing.T) {
+	if os.Getenv("LOTUS_TEST_DEADLINE_TOGGLING") != "1" {
+		t.Skip("this takes a few minutes, set LOTUS_TEST_DEADLINE_TOGGLING=1 to run")
+	}
+	logging.SetLogLevel("miner", "ERROR")
+	logging.SetLogLevel("chainstore", "ERROR")
+	logging.SetLogLevel("chain", "ERROR")
+	logging.SetLogLevel("sub", "ERROR")
+	logging.SetLogLevel("storageminer", "FATAL")
+
+	test.TestDeadlineToggling(t, builder.MockSbBuilder, 2*time.Millisecond)
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/network"
+	"github.com/ipfs/go-cid"
 
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 
@@ -72,8 +73,8 @@ var (
 	}()
 
 	// Actor consts
-	// TODO: Pull from actors when its made not private
-	MinDealDuration = abi.ChainEpoch(180 * builtin2.EpochsInDay)
+	// TODO: pieceSize unused from actors
+	MinDealDuration, MaxDealDuration = policy.DealDurationBounds(0)
 
 	PackingEfficiencyNum   int64 = 4
 	PackingEfficiencyDenom int64 = 5
@@ -94,17 +95,19 @@ var (
 	UpgradeClausHeight     abi.ChainEpoch = -10
 	UpgradeActorsV3Height  abi.ChainEpoch = -11
 	UpgradeNorwegianHeight abi.ChainEpoch = -12
+	UpgradeActorsV4Height  abi.ChainEpoch = -13
 
 	DrandSchedule = map[abi.ChainEpoch]DrandEnum{
 		0: DrandMainnet,
 	}
 
-	NewestNetworkVersion       = network.Version9
+	NewestNetworkVersion       = network.Version11
 	ActorUpgradeNetworkVersion = network.Version4
 
 	Devnet      = true
 	ZeroAddress = MustParseAddress("f3yaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaby2smx7a")
 
+	WhitelistedBlock  = cid.Undef
 	BootstrappersFile = ""
 	GenesisFile       = ""
 )
