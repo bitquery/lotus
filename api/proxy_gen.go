@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	cid "github.com/ipfs/go-cid/_rsrch/cidiface"
 	"io"
 	"time"
 
