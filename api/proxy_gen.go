@@ -500,6 +500,8 @@ type GatewayStruct struct {
 
 		StateGetActor func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) ``
 
+		StateMultiGetActor func(p0 context.Context, p1 []address.Address, p2 types.TipSetKey) ([]*types.Actor, error) ``
+
 		StateListMiners func(p0 context.Context, p1 types.TipSetKey) ([]address.Address, error) ``
 
 		StateLookupID func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (address.Address, error) ``
