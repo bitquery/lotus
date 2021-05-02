@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	cid "github.com/ipfs/go-cid/_rsrch/cidiface"
 	"io"
 	"time"
 
@@ -1875,6 +1876,10 @@ func (s *FullNodeStruct) StateCall(p0 context.Context, p1 *types.Message, p2 typ
 
 func (c *FullNodeStruct) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*InvocResult, error) {
 	return c.Internal.StateMultiCall(ctx, msgs, tsk)
+}
+
+func (s *FullNodeStub) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*InvocResult, error) {
+	return nil, xerrors.New("method not supported")
 }
 
 func (s *FullNodeStub) StateCall(p0 context.Context, p1 *types.Message, p2 types.TipSetKey) (*InvocResult, error) {
