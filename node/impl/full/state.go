@@ -9,7 +9,6 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 
 	"github.com/filecoin-project/go-state-types/cbor"
-	cbor "github.com/ipfs/go-ipld-cbor"
 	cid "github.com/ipfs/go-cid"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
