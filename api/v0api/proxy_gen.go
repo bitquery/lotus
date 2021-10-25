@@ -10,6 +10,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
+	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/dline"
@@ -255,6 +256,8 @@ type FullNodeStruct struct {
 
 		StateCall func(p0 context.Context, p1 *types.Message, p2 types.TipSetKey) (*api.InvocResult, error) `perm:"read"`
 
+		StateMultiCall func(context.Context, []*types.Message, types.TipSetKey) ([]*api.InvocResult, error)  `perm:"read"`
+
 		StateChangedActors func(p0 context.Context, p1 cid.Cid, p2 cid.Cid) (map[string]types.Actor, error) `perm:"read"`
 
 		StateCirculatingSupply func(p0 context.Context, p1 types.TipSetKey) (abi.TokenAmount, error) `perm:"read"`
@@ -265,7 +268,11 @@ type FullNodeStruct struct {
 
 		StateDecodeParams func(p0 context.Context, p1 address.Address, p2 abi.MethodNum, p3 []byte, p4 types.TipSetKey) (interface{}, error) `perm:"read"`
 
+		StateMultiDecodeParams func(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error) `perm:"read"`
+
 		StateGetActor func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) `perm:"read"`
+
+		StateMultiGetActor func(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) `perm:"read"`
 
 		StateGetRandomnessFromBeacon func(p0 context.Context, p1 crypto.DomainSeparationTag, p2 abi.ChainEpoch, p3 []byte, p4 types.TipSetKey) (abi.Randomness, error) `perm:"read"`
 
@@ -324,6 +331,8 @@ type FullNodeStruct struct {
 		StateReadState func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*api.ActorState, error) `perm:"read"`
 
 		StateReplay func(p0 context.Context, p1 types.TipSetKey, p2 cid.Cid) (*api.InvocResult, error) `perm:"read"`
+
+		StateMultiReplay func(context.Context, types.TipSetKey) ([]*api.InvocResult, error) `perm:"read"`
 
 		StateSearchMsg func(p0 context.Context, p1 cid.Cid) (*api.MsgLookup, error) `perm:"read"`
 
@@ -434,6 +443,8 @@ type GatewayStruct struct {
 		StateDealProviderCollateralBounds func(p0 context.Context, p1 abi.PaddedPieceSize, p2 bool, p3 types.TipSetKey) (api.DealCollateralBounds, error) ``
 
 		StateGetActor func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) ``
+
+		StateMultiGetActor func(p0 context.Context, p1 []address.Address, p2 types.TipSetKey) ([]*types.Actor, error) ``
 
 		StateGetReceipt func(p0 context.Context, p1 cid.Cid, p2 types.TipSetKey) (*types.MessageReceipt, error) ``
 
@@ -1680,6 +1691,14 @@ func (s *FullNodeStub) StateCall(p0 context.Context, p1 *types.Message, p2 types
 	return nil, ErrNotSupported
 }
 
+func (c *FullNodeStruct) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
+	return c.Internal.StateMultiCall(ctx, msgs, tsk)
+}
+
+func (s *FullNodeStub) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
+	return nil, ErrNotSupported
+}
+
 func (s *FullNodeStruct) StateChangedActors(p0 context.Context, p1 cid.Cid, p2 cid.Cid) (map[string]types.Actor, error) {
 	if s.Internal.StateChangedActors == nil {
 		return *new(map[string]types.Actor), ErrNotSupported
@@ -1735,6 +1754,10 @@ func (s *FullNodeStub) StateDecodeParams(p0 context.Context, p1 address.Address,
 	return nil, ErrNotSupported
 }
 
+func (s *FullNodeStruct) StateMultiDecodeParams(p0 context.Context, p1 []address.Address, p2 []abi.MethodNum, p3 [][]byte, p4 types.TipSetKey) ([]interface{}, error) {
+	return s.Internal.StateMultiDecodeParams(p0, p1, p2, p3, p4)
+}
+
 func (s *FullNodeStruct) StateGetActor(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) {
 	if s.Internal.StateGetActor == nil {
 		return nil, ErrNotSupported
@@ -1766,6 +1789,10 @@ func (s *FullNodeStruct) StateGetRandomnessFromTickets(p0 context.Context, p1 cr
 
 func (s *FullNodeStub) StateGetRandomnessFromTickets(p0 context.Context, p1 crypto.DomainSeparationTag, p2 abi.ChainEpoch, p3 []byte, p4 types.TipSetKey) (abi.Randomness, error) {
 	return *new(abi.Randomness), ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateMultiGetActor(p0 context.Context, p1 []address.Address, p2 types.TipSetKey) ([]*types.Actor, error) {
+	return s.Internal.StateMultiGetActor(p0, p1, p2)
 }
 
 func (s *FullNodeStruct) StateGetReceipt(p0 context.Context, p1 cid.Cid, p2 types.TipSetKey) (*types.MessageReceipt, error) {
@@ -2063,6 +2090,10 @@ func (s *FullNodeStruct) StateReplay(p0 context.Context, p1 types.TipSetKey, p2 
 
 func (s *FullNodeStub) StateReplay(p0 context.Context, p1 types.TipSetKey, p2 cid.Cid) (*api.InvocResult, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateMultiReplay(p0 context.Context, p1 types.TipSetKey) ([]*api.InvocResult, error) {
+	return s.Internal.StateMultiReplay(p0, p1)
 }
 
 func (s *FullNodeStruct) StateSearchMsg(p0 context.Context, p1 cid.Cid) (*api.MsgLookup, error) {
@@ -2613,6 +2644,10 @@ func (s *GatewayStruct) StateGetActor(p0 context.Context, p1 address.Address, p2
 
 func (s *GatewayStub) StateGetActor(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *GatewayStruct) StateMultiGetActor(p0 context.Context, p1 []address.Address, p2 types.TipSetKey) ([]*types.Actor, error) {
+	return s.Internal.StateMultiGetActor(p0, p1, p2)
 }
 
 func (s *GatewayStruct) StateGetReceipt(p0 context.Context, p1 cid.Cid, p2 types.TipSetKey) (*types.MessageReceipt, error) {

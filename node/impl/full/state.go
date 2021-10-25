@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 
 	"github.com/filecoin-project/go-state-types/cbor"
+	cbor "github.com/ipfs/go-ipld-cbor"
 	cid "github.com/ipfs/go-cid"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
@@ -47,6 +48,7 @@ type StateModuleAPI interface {
 	MsigGetPending(ctx context.Context, addr address.Address, tsk types.TipSetKey) ([]*api.MsigTransaction, error)
 	StateAccountKey(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error)
 	StateDealProviderCollateralBounds(ctx context.Context, size abi.PaddedPieceSize, verified bool, tsk types.TipSetKey) (api.DealCollateralBounds, error)
+	StateMultiGetActor(ctx context.Context, actor []address.Address, tsk types.TipSetKey) ([]*types.Actor, error)
 	StateGetActor(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*types.Actor, error)
 	StateListMiners(ctx context.Context, tsk types.TipSetKey) ([]address.Address, error)
 	StateLookupID(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error)
@@ -380,6 +382,34 @@ func (a *StateAPI) StateCall(ctx context.Context, msg *types.Message, tsk types.
 	return res, err
 }
 
+func (a *StateAPI) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
+	base_ts, err := a.Chain.GetTipSetFromKey(tsk)
+	if err != nil {
+		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
+	}
+	array := make([]*api.InvocResult, len(msgs))
+	for index, msg := range msgs {
+		ts := base_ts
+		var res *api.InvocResult
+		for {
+			res, err = a.StateManager.Call(ctx, msg, ts)
+			if err != stmgr.ErrExpensiveFork {
+				break
+			}
+			ts, err = a.Chain.GetTipSetFromKey(ts.Parents())
+			if err != nil {
+				return nil, xerrors.Errorf("getting parent tipset: %w", err)
+			}
+		}
+		if err != nil {
+			return nil, xerrors.Errorf("error getting call result: %w", err)
+		}
+		array[index] = res
+	}
+
+	return array, err
+}
+
 func (a *StateAPI) StateReplay(ctx context.Context, tsk types.TipSetKey, mc cid.Cid) (*api.InvocResult, error) {
 	msgToReplay := mc
 	var ts *types.TipSet
@@ -438,6 +468,62 @@ func (m *StateModule) StateGetActor(ctx context.Context, actor address.Address, 
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
 	return m.StateManager.LoadActor(ctx, actor, ts)
+}
+
+func (a *StateAPI) StateMultiReplay(ctx context.Context, tsk types.TipSetKey) ([]*api.InvocResult, error) {
+
+	var ts *types.TipSet
+	var err error
+
+	ts, err = a.Chain.LoadTipSet(tsk)
+	if err != nil {
+		return nil, xerrors.Errorf("loading specified tipset %s: %w", tsk, err)
+	}
+
+	return a.StateManager.PlayAllMessagesInTipset(ctx, ts)
+
+}
+
+func stateForTs(ctx context.Context, ts *types.TipSet, cstore *store.ChainStore, smgr *stmgr.StateManager) (*state.StateTree, error) {
+	if ts == nil {
+		ts = cstore.GetHeaviestTipSet()
+	}
+
+	st, _, err := smgr.TipSetState(ctx, ts)
+	if err != nil {
+		return nil, err
+	}
+
+	cst := cbor.NewCborStore(cstore.StateBlockstore())
+	return state.LoadStateTree(cst, st)
+}
+func (a *StateAPI) stateForTs(ctx context.Context, ts *types.TipSet) (*state.StateTree, error) {
+	return stateForTs(ctx, ts, a.Chain, a.StateManager)
+}
+func (m *StateModule) stateForTs(ctx context.Context, ts *types.TipSet) (*state.StateTree, error) {
+	return stateForTs(ctx, ts, m.Chain, m.StateManager)
+}
+
+func (m *StateModule) StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) {
+	ts, err := m.Chain.GetTipSetFromKey(tsk)
+	if err != nil {
+		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
+	}
+	state, err := m.stateForTs(ctx, ts)
+	if err != nil {
+		return nil, xerrors.Errorf("computing tipset state failed: %w", err)
+	}
+
+	array := make([]*types.Actor, len(actors))
+	for index, actor := range actors {
+		info, err := state.GetActor(actor)
+		if err != nil {
+			array[index] = nil
+		} else {
+			array[index] = info
+		}
+	}
+	return array, nil
 }
 
 func (m *StateModule) StateLookupID(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error) {
@@ -519,6 +605,46 @@ func (a *StateAPI) StateEncodeParams(ctx context.Context, toActCode cid.Cid, met
 	}
 
 	return cbb.Bytes(), nil
+}
+
+func (a *StateAPI) StateMultiDecodeParams(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error) {
+
+	ts, err := a.Chain.GetTipSetFromKey(tsk)
+	if err != nil {
+		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
+	}
+
+	state, err := a.stateForTs(ctx, ts)
+	if err != nil {
+		return nil, xerrors.Errorf("computing tipset state failed: %w", err)
+	}
+
+	if (len(toAddrs) != len(methods)) || (len(toAddrs) != len(params)) {
+		return nil, xerrors.Errorf("Array sizes are not equal: toAddrs: %v methods: %v params: %v ", len(toAddrs), len(methods), len(params))
+	}
+
+	array := make([]interface{}, len(toAddrs))
+	for index, toAddr := range toAddrs {
+		act, err := state.GetActor(toAddr)
+		if err != nil {
+			array[index] = nil
+		} else {
+			paramType, err := stmgr.GetParamType(act.Code, methods[index])
+			if err != nil {
+				array[index] = nil
+			} else {
+				if err = paramType.UnmarshalCBOR(bytes.NewReader(params[index])); err != nil {
+					array[index] = nil
+				} else {
+					array[index] = paramType
+				}
+
+			}
+
+		}
+
+	}
+	return array, nil
 }
 
 // This is on StateAPI because miner.Miner requires this, and MinerAPI requires miner.Miner
