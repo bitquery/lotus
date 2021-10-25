@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 
 	"github.com/filecoin-project/go-state-types/cbor"
+	cboripld "github.com/ipfs/go-ipld-cbor"
 	cid "github.com/ipfs/go-cid"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
@@ -493,7 +494,7 @@ func stateForTs(ctx context.Context, ts *types.TipSet, cstore *store.ChainStore,
 		return nil, err
 	}
 
-	cst := cbor.NewCborStore(cstore.StateBlockstore())
+	cst := cboripld.NewCborStore(cstore.StateBlockstore())
 	return state.LoadStateTree(cst, st)
 }
 func (a *StateAPI) stateForTs(ctx context.Context, ts *types.TipSet) (*state.StateTree, error) {
@@ -622,13 +623,14 @@ func (a *StateAPI) StateMultiDecodeParams(ctx context.Context, toAddrs []address
 		return nil, xerrors.Errorf("Array sizes are not equal: toAddrs: %v methods: %v params: %v ", len(toAddrs), len(methods), len(params))
 	}
 
+    acctRegistry := a.TsExec.NewActorRegistry()
 	array := make([]interface{}, len(toAddrs))
 	for index, toAddr := range toAddrs {
 		act, err := state.GetActor(toAddr)
 		if err != nil {
 			array[index] = nil
 		} else {
-			paramType, err := stmgr.GetParamType(act.Code, methods[index])
+			paramType, err := stmgr.GetParamType(acctRegistry,act.Code, methods[index])
 			if err != nil {
 				array[index] = nil
 			} else {
