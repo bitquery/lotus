@@ -28,6 +28,7 @@ import (
 	exported4 "github.com/filecoin-project/specs-actors/v4/actors/builtin/exported"
 	exported5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/exported"
 	exported6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/exported"
+	exported7 "github.com/filecoin-project/specs-actors/v7/actors/builtin/exported"
 
 	/* inline-gen end */
 
@@ -59,6 +60,7 @@ func NewActorRegistry() *vm.ActorRegistry {
 	inv.Register(vm.ActorsVersionPredicate(actors.Version4), exported4.BuiltinActors()...)
 	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported5.BuiltinActors()...)
 	inv.Register(vm.ActorsVersionPredicate(actors.Version6), exported6.BuiltinActors()...)
+	inv.Register(vm.ActorsVersionPredicate(actors.Version7), exported7.BuiltinActors()...)
 
 	/* inline-gen end */
 
@@ -167,7 +169,10 @@ func (t *TipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			}
 		}
 
-		vmi.SetBlockHeight(i + 1)
+		if err = vmi.SetBlockHeight(ctx, i+1); err != nil {
+			return cid.Undef, cid.Undef, xerrors.Errorf("error advancing vm an epoch: %w", err)
+		}
+
 		pstate = newState
 	}
 

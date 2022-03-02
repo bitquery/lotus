@@ -283,7 +283,7 @@ Response:
 ```json
 {
   "Version": "string value",
-  "APIVersion": 131328,
+  "APIVersion": 131584,
   "BlockDelay": 42
 }
 ```
@@ -1269,7 +1269,8 @@ Response:
     "Stages": {
       "Stages": null
     }
-  }
+  },
+  "Event": 5
 }
 ```
 
@@ -4698,7 +4699,7 @@ Inputs:
 ]
 ```
 
-Response: `14`
+Response: `15`
 
 ### StateReadState
 StateReadState returns the indicated actor's state.
@@ -5016,7 +5017,8 @@ Response:
   "VerifiedDealWeight": "0",
   "InitialPledge": "0",
   "ExpectedDayReward": "0",
-  "ExpectedStoragePledge": "0"
+  "ExpectedStoragePledge": "0",
+  "SectorKeyCID": null
 }
 ```
 
