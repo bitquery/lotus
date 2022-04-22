@@ -295,7 +295,7 @@ func TestSealAndVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
-	cleanup := func() {
+	t.Cleanup(func() {
 		if t.Failed() {
 			fmt.Printf("not removing %s\n", cdir)
 			return
@@ -303,8 +303,7 @@ func TestSealAndVerify(t *testing.T) {
 		if err := os.RemoveAll(cdir); err != nil {
 			t.Error(err)
 		}
-	}
-	defer cleanup()
+	})
 
 	si := storage.SectorRef{
 		ID:        abi.SectorID{Miner: miner, Number: 1},
@@ -369,7 +368,7 @@ func TestSealPoStNoCommit(t *testing.T) {
 		t.Fatalf("%+v", err)
 	}
 
-	cleanup := func() {
+	t.Cleanup(func() {
 		if t.Failed() {
 			fmt.Printf("not removing %s\n", dir)
 			return
@@ -377,8 +376,7 @@ func TestSealPoStNoCommit(t *testing.T) {
 		if err := os.RemoveAll(dir); err != nil {
 			t.Error(err)
 		}
-	}
-	defer cleanup()
+	})
 
 	si := storage.SectorRef{
 		ID:        abi.SectorID{Miner: miner, Number: 1},
@@ -434,13 +432,11 @@ func TestSealAndVerify3(t *testing.T) {
 		t.Fatalf("%+v", err)
 	}
 
-	cleanup := func() {
+	t.Cleanup(func() {
 		if err := os.RemoveAll(dir); err != nil {
 			t.Error(err)
 		}
-	}
-
-	defer cleanup()
+	})
 
 	var wg sync.WaitGroup
 
@@ -512,7 +508,7 @@ func TestSealAndVerifyAggregate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
-	cleanup := func() {
+	t.Cleanup(func() {
 		if t.Failed() {
 			fmt.Printf("not removing %s\n", cdir)
 			return
@@ -520,8 +516,7 @@ func TestSealAndVerifyAggregate(t *testing.T) {
 		if err := os.RemoveAll(cdir); err != nil {
 			t.Error(err)
 		}
-	}
-	defer cleanup()
+	})
 
 	avi := proof5.AggregateSealVerifyProofAndInfos{
 		Miner:          miner,
@@ -917,7 +912,7 @@ func TestMulticoreSDR(t *testing.T) {
 		t.Fatalf("%+v", err)
 	}
 
-	cleanup := func() {
+	t.Cleanup(func() {
 		if t.Failed() {
 			fmt.Printf("not removing %s\n", dir)
 			return
@@ -925,8 +920,7 @@ func TestMulticoreSDR(t *testing.T) {
 		if err := os.RemoveAll(dir); err != nil {
 			t.Error(err)
 		}
-	}
-	defer cleanup()
+	})
 
 	si := storage.SectorRef{
 		ID:        abi.SectorID{Miner: miner, Number: 1},
@@ -949,4 +943,58 @@ func TestMulticoreSDR(t *testing.T) {
 	}
 
 	require.True(t, ok)
+}
+
+func TestPoStChallengeAssumptions(t *testing.T) {
+	var r [32]byte
+	rand.Read(r[:])
+	r[31] &= 0x3f
+
+	// behaves like a pure function
+	{
+		c1, err := ffi.GeneratePoStFallbackSectorChallenges(abi.RegisteredPoStProof_StackedDrgWindow32GiBV1, 1000, r[:], []abi.SectorNumber{1, 2, 3, 4})
+		require.NoError(t, err)
+
+		c2, err := ffi.GeneratePoStFallbackSectorChallenges(abi.RegisteredPoStProof_StackedDrgWindow32GiBV1, 1000, r[:], []abi.SectorNumber{1, 2, 3, 4})
+		require.NoError(t, err)
+
+		require.Equal(t, c1, c2)
+	}
+
+	// doesn't sort, challenges position dependant
+	{
+		c1, err := ffi.GeneratePoStFallbackSectorChallenges(abi.RegisteredPoStProof_StackedDrgWindow32GiBV1, 1000, r[:], []abi.SectorNumber{1, 2, 3, 4})
+		require.NoError(t, err)
+
+		c2, err := ffi.GeneratePoStFallbackSectorChallenges(abi.RegisteredPoStProof_StackedDrgWindow32GiBV1, 1000, r[:], []abi.SectorNumber{4, 2, 3, 1})
+		require.NoError(t, err)
+
+		require.NotEqual(t, c1, c2)
+
+		require.Equal(t, c1.Challenges[2], c2.Challenges[2])
+		require.Equal(t, c1.Challenges[3], c2.Challenges[3])
+
+		require.NotEqual(t, c1.Challenges[1], c2.Challenges[1])
+		require.NotEqual(t, c1.Challenges[4], c2.Challenges[4])
+	}
+
+	// length doesn't matter
+	{
+		c1, err := ffi.GeneratePoStFallbackSectorChallenges(abi.RegisteredPoStProof_StackedDrgWindow32GiBV1, 1000, r[:], []abi.SectorNumber{1})
+		require.NoError(t, err)
+
+		c2, err := ffi.GeneratePoStFallbackSectorChallenges(abi.RegisteredPoStProof_StackedDrgWindow32GiBV1, 1000, r[:], []abi.SectorNumber{1, 2})
+		require.NoError(t, err)
+
+		require.NotEqual(t, c1, c2)
+		require.Equal(t, c1.Challenges[1], c2.Challenges[1])
+	}
+
+	// generate dedupes
+	{
+		c1, err := ffi.GeneratePoStFallbackSectorChallenges(abi.RegisteredPoStProof_StackedDrgWindow32GiBV1, 1000, r[:], []abi.SectorNumber{1, 2, 1, 4})
+		require.NoError(t, err)
+		require.Len(t, c1.Sectors, 3)
+		require.Len(t, c1.Challenges, 3)
+	}
 }

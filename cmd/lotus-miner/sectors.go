@@ -11,9 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/actors/builtin"
-
 	"github.com/docker/go-units"
 	"github.com/fatih/color"
 	cbor "github.com/ipfs/go-ipld-cbor"
@@ -56,7 +53,6 @@ var sectorsCmd = &cli.Command{
 		sectorsRemoveCmd,
 		sectorsSnapUpCmd,
 		sectorsSnapAbortCmd,
-		sectorsMarkForUpgradeCmd,
 		sectorsStartSealCmd,
 		sectorsSealDelayCmd,
 		sectorsCapacityCollateralCmd,
@@ -161,7 +157,7 @@ var sectorsStatusCmd = &cli.Command{
 			fmt.Printf("Expiration:\t\t%v\n", status.Expiration)
 			fmt.Printf("DealWeight:\t\t%v\n", status.DealWeight)
 			fmt.Printf("VerifiedDealWeight:\t\t%v\n", status.VerifiedDealWeight)
-			fmt.Printf("InitialPledge:\t\t%v\n", status.InitialPledge)
+			fmt.Printf("InitialPledge:\t\t%v\n", types.FIL(status.InitialPledge))
 			fmt.Printf("\nExpiration Info\n")
 			fmt.Printf("OnTime:\t\t%v\n", status.OnTime)
 			fmt.Printf("Early:\t\t%v\n", status.Early)
@@ -294,8 +290,14 @@ var sectorsListCmd = &cli.Command{
 			Aliases: []string{"e"},
 		},
 		&cli.BoolFlag{
-			Name:  "seal-time",
-			Usage: "display how long it took for the sector to be sealed",
+			Name:    "initial-pledge",
+			Usage:   "display initial pledge",
+			Aliases: []string{"p"},
+		},
+		&cli.BoolFlag{
+			Name:    "seal-time",
+			Usage:   "display how long it took for the sector to be sealed",
+			Aliases: []string{"t"},
 		},
 		&cli.StringFlag{
 			Name:  "states",
@@ -345,7 +347,7 @@ var sectorsListCmd = &cli.Command{
 
 		if cctx.Bool("unproven") {
 			for state := range sealing.ExistSectorStateList {
-				if state == sealing.Proving {
+				if state == sealing.Proving || state == sealing.Available {
 					continue
 				}
 				states = append(states, api.SectorState(state))
@@ -405,6 +407,7 @@ var sectorsListCmd = &cli.Command{
 			tablewriter.Col("Deals"),
 			tablewriter.Col("DealWeight"),
 			tablewriter.Col("VerifiedPower"),
+			tablewriter.Col("Pledge"),
 			tablewriter.NewLineCol("Error"),
 			tablewriter.NewLineCol("RecoveryTimeout"))
 
@@ -430,7 +433,7 @@ var sectorsListCmd = &cli.Command{
 			const verifiedPowerGainMul = 9
 
 			dw, vp := .0, .0
-			estimate := st.Expiration-st.Activation <= 0
+			estimate := (st.Expiration-st.Activation <= 0) || sealing.IsUpgradeState(sealing.SectorState(st.State))
 			if !estimate {
 				rdw := big.Add(st.DealWeight, st.VerifiedDealWeight)
 				dw = float64(big.Div(rdw, big.NewInt(int64(st.Expiration-st.Activation))).Uint64())
@@ -482,6 +485,9 @@ var sectorsListCmd = &cli.Command{
 					if st.Early > 0 {
 						m["RecoveryTimeout"] = color.YellowString(lcli.EpochTime(head.Height(), st.Early))
 					}
+				}
+				if inSSet && cctx.Bool("initial-pledge") {
+					m["Pledge"] = types.FIL(st.InitialPledge).Short()
 				}
 			}
 
@@ -1558,58 +1564,6 @@ var sectorsSnapAbortCmd = &cli.Command{
 	},
 }
 
-var sectorsMarkForUpgradeCmd = &cli.Command{
-	Name:      "mark-for-upgrade",
-	Usage:     "Mark a committed capacity sector for replacement by a sector with deals",
-	ArgsUsage: "<sectorNum>",
-	Action: func(cctx *cli.Context) error {
-		if cctx.Args().Len() != 1 {
-			return lcli.ShowHelp(cctx, xerrors.Errorf("must pass sector number"))
-		}
-
-		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
-		if err != nil {
-			return err
-		}
-		defer closer()
-
-		api, nCloser, err := lcli.GetFullNodeAPI(cctx)
-		if err != nil {
-			return err
-		}
-		defer nCloser()
-		ctx := lcli.ReqContext(cctx)
-
-		nv, err := api.StateNetworkVersion(ctx, types.EmptyTSK)
-		if err != nil {
-			return xerrors.Errorf("failed to get network version: %w", err)
-		}
-		if nv >= network.Version15 {
-			return xerrors.Errorf("classic cc upgrades disabled v15 and beyond, use `snap-up`")
-		}
-
-		// disable mark for upgrade two days before the ntwk v15 upgrade
-		// TODO: remove the following block in v1.15.1
-		head, err := api.ChainHead(ctx)
-		if err != nil {
-			return xerrors.Errorf("failed to get chain head: %w", err)
-		}
-
-		twoDays := abi.ChainEpoch(2 * builtin.EpochsInDay)
-		if head.Height() > (build.UpgradeOhSnapHeight - twoDays) {
-			return xerrors.Errorf("OhSnap is coming soon, " +
-				"please use `snap-up` to upgrade your cc sectors after the network v15 upgrade!")
-		}
-
-		id, err := strconv.ParseUint(cctx.Args().Get(0), 10, 64)
-		if err != nil {
-			return xerrors.Errorf("could not parse sector number: %w", err)
-		}
-
-		return nodeApi.SectorMarkForUpgrade(ctx, abi.SectorNumber(id), false)
-	},
-}
-
 var sectorsStartSealCmd = &cli.Command{
 	Name:      "seal",
 	Usage:     "Manually start sealing a sector (filling any unused space with junk)",
@@ -1755,6 +1709,11 @@ var sectorsUpdateCmd = &cli.Command{
 		id, err := strconv.ParseUint(cctx.Args().Get(0), 10, 64)
 		if err != nil {
 			return xerrors.Errorf("could not parse sector number: %w", err)
+		}
+
+		_, err = nodeApi.SectorsStatus(ctx, abi.SectorNumber(id), false)
+		if err != nil {
+			return xerrors.Errorf("sector %d not found, could not change state", id)
 		}
 
 		newState := cctx.Args().Get(1)

@@ -97,7 +97,7 @@ BINS+=lotus-miner
 
 lotus-worker: $(BUILD_DEPS)
 	rm -f lotus-worker
-	$(GOCC) build $(GOFLAGS) -o lotus-worker ./cmd/lotus-seal-worker
+	$(GOCC) build $(GOFLAGS) -o lotus-worker ./cmd/lotus-worker
 .PHONY: lotus-worker
 BINS+=lotus-worker
 
@@ -344,6 +344,8 @@ docsgen-openrpc-worker: docsgen-openrpc-bin
 gen: actors-gen type-gen method-gen cfgdoc-gen docsgen api-gen circleci
 	@echo ">>> IF YOU'VE MODIFIED THE CLI OR CONFIG, REMEMBER TO ALSO MAKE docsgen-cli"
 .PHONY: gen
+
+jen: gen
 
 snap: lotus lotus-miner lotus-worker
 	snapcraft

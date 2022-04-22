@@ -210,7 +210,7 @@ func (mp *MessagePool) selectMessagesOptimal(ctx context.Context, curTs, ts *typ
 
 	// 0. Load messages from the target tipset; if it is the same as the current tipset in
 	//    the mpool, then this is just the pending messages
-	pending, err := mp.getPendingMessages(curTs, ts)
+	pending, err := mp.getPendingMessages(ctx, curTs, ts)
 	if err != nil {
 		return nil, err
 	}
@@ -458,7 +458,7 @@ func (mp *MessagePool) selectMessagesGreedy(ctx context.Context, curTs, ts *type
 
 	// 0. Load messages for the target tipset; if it is the same as the current tipset in the mpool
 	//    then this is just the pending messages
-	pending, err := mp.getPendingMessages(curTs, ts)
+	pending, err := mp.getPendingMessages(ctx, curTs, ts)
 	if err != nil {
 		return nil, err
 	}
@@ -695,7 +695,7 @@ tailLoop:
 	return result
 }
 
-func (mp *MessagePool) getPendingMessages(curTs, ts *types.TipSet) (map[address.Address]map[uint64]*types.SignedMessage, error) {
+func (mp *MessagePool) getPendingMessages(ctx context.Context, curTs, ts *types.TipSet) (map[address.Address]map[uint64]*types.SignedMessage, error) {
 	start := time.Now()
 
 	result := make(map[address.Address]map[uint64]*types.SignedMessage)
@@ -731,7 +731,7 @@ func (mp *MessagePool) getPendingMessages(curTs, ts *types.TipSet) (map[address.
 		return result, nil
 	}
 
-	if err := mp.runHeadChange(curTs, ts, result); err != nil {
+	if err := mp.runHeadChange(ctx, curTs, ts, result); err != nil {
 		return nil, xerrors.Errorf("failed to process difference between mpool head and given head: %w", err)
 	}
 
@@ -781,6 +781,7 @@ func (mp *MessagePool) createMessageChains(actor address.Address, mset map[uint6
 	//   cannot exceed the block limit; drop all messages that exceed the limit
 	// - the total gasReward cannot exceed the actor's balance; drop all messages that exceed
 	//   the balance
+
 	a, err := mp.api.GetActorAfter(actor, ts)
 	if err != nil {
 		log.Errorf("failed to load actor state, not building chain for %s: %v", actor, err)
@@ -793,6 +794,12 @@ func (mp *MessagePool) createMessageChains(actor address.Address, mset map[uint6
 	skip := 0
 	i := 0
 	rewards := make([]*big.Int, 0, len(msgs))
+
+	nv, err := mp.getNtwkVersion(ts.Height())
+	if err != nil {
+		log.Errorf("getting network version: %v", err)
+		return nil
+	}
 	for i = 0; i < len(msgs); i++ {
 		m := msgs[i]
 
@@ -808,7 +815,7 @@ func (mp *MessagePool) createMessageChains(actor address.Address, mset map[uint6
 		}
 		curNonce++
 
-		minGas := vm.PricelistByEpoch(ts.Height()).OnChainMessage(m.ChainLength()).Total()
+		minGas := vm.PricelistByEpochAndNetworkVersion(ts.Height(), nv).OnChainMessage(m.ChainLength()).Total()
 		if m.Message.GasLimit < minGas {
 			break
 		}
