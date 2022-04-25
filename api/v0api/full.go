@@ -400,7 +400,7 @@ type FullNode interface {
 	StateMultiReplay(context.Context, types.TipSetKey) ([]*api.InvocResult, error) //perm:read
 	// StateGetActor returns the indicated actor's nonce and balance.
 	StateGetActor(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*types.Actor, error) //perm:read
-	StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) //perm:read
+	//StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) //perm:read
 	// StateReadState returns the indicated actor's state.
 	StateReadState(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*api.ActorState, error) //perm:read
 	// StateListMessages looks back and returns all messages with a matching to or from address, stopping at the given height.

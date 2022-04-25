@@ -426,7 +426,7 @@ type FullNode interface {
 
 	// StateGetActor returns the indicated actor's nonce and balance.
 	StateGetActor(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*types.Actor, error) //perm:read
-	StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) //perm:read
+	//StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) //perm:read
 
 	// StateReadState returns the indicated actor's state.
 	StateReadState(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*ActorState, error) //perm:read

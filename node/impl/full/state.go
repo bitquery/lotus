@@ -48,7 +48,7 @@ type StateModuleAPI interface {
 	MsigGetPending(ctx context.Context, addr address.Address, tsk types.TipSetKey) ([]*api.MsigTransaction, error)
 	StateAccountKey(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error)
 	StateDealProviderCollateralBounds(ctx context.Context, size abi.PaddedPieceSize, verified bool, tsk types.TipSetKey) (api.DealCollateralBounds, error)
-	StateMultiGetActor(ctx context.Context, actor []address.Address, tsk types.TipSetKey) ([]*types.Actor, error)
+	//StateMultiGetActor(ctx context.Context, actor []address.Address, tsk types.TipSetKey) ([]*types.Actor, error)
 	StateGetActor(ctx context.Context, actor address.Address, tsk types.TipSetKey) (*types.Actor, error)
 	StateListMiners(ctx context.Context, tsk types.TipSetKey) ([]address.Address, error)
 	StateLookupID(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error)
@@ -383,7 +383,7 @@ func (a *StateAPI) StateCall(ctx context.Context, msg *types.Message, tsk types.
 }
 
 func (a *StateAPI) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
-	base_ts, err := a.Chain.GetTipSetFromKey(tsk)
+	base_ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
@@ -396,7 +396,7 @@ func (a *StateAPI) StateMultiCall(ctx context.Context, msgs []*types.Message, ts
 			if err != stmgr.ErrExpensiveFork {
 				break
 			}
-			ts, err = a.Chain.GetTipSetFromKey(ts.Parents())
+			ts, err = a.Chain.GetTipSetFromKey(ctx, ts.Parents())
 			if err != nil {
 				return nil, xerrors.Errorf("getting parent tipset: %w", err)
 			}
@@ -475,7 +475,7 @@ func (a *StateAPI) StateMultiReplay(ctx context.Context, tsk types.TipSetKey) ([
 	var ts *types.TipSet
 	var err error
 
-	ts, err = a.Chain.LoadTipSet(tsk)
+	ts, err = a.Chain.LoadTipSet(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading specified tipset %s: %w", tsk, err)
 	}
@@ -505,7 +505,7 @@ func (m *StateModule) stateForTs(ctx context.Context, ts *types.TipSet) (*state.
 }
 
 func (m *StateModule) StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) {
-	ts, err := m.Chain.GetTipSetFromKey(tsk)
+	ts, err := m.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
@@ -609,7 +609,7 @@ func (a *StateAPI) StateEncodeParams(ctx context.Context, toActCode cid.Cid, met
 
 func (a *StateAPI) StateMultiDecodeParams(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error) {
 
-	ts, err := a.Chain.GetTipSetFromKey(tsk)
+	ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
