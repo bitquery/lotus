@@ -18,6 +18,10 @@ type Config struct {
 	// includes failed, 0 = no limit
 	MaxSealingSectorsForDeals uint64
 
+	MakeNewSectorForDeals bool
+
+	MakeCCSectorsAvailable bool
+
 	WaitDealsDelay time.Duration
 
 	CommittedCapacitySectorLifetime time.Duration

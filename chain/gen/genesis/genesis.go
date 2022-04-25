@@ -491,14 +491,13 @@ func VerifyPreSealedData(ctx context.Context, cs *store.ChainStore, sys vm.Sysca
 		Actors:         filcns.NewActorRegistry(),
 		Syscalls:       mkFakedSigSyscalls(sys),
 		CircSupplyCalc: csc,
-		NtwkVersion: func(_ context.Context, _ abi.ChainEpoch) network.Version {
-			return nv
-		},
-		BaseFee: types.NewInt(0),
+		FilVested:      big.Zero(),
+		NetworkVersion: nv,
+		BaseFee:        big.Zero(),
 	}
-	vm, err := vm.NewVM(ctx, &vmopt)
+	vm, err := vm.NewLegacyVM(ctx, &vmopt)
 	if err != nil {
-		return cid.Undef, xerrors.Errorf("failed to create NewVM: %w", err)
+		return cid.Undef, xerrors.Errorf("failed to create NewLegacyVM: %w", err)
 	}
 
 	for mi, m := range template.Miners {
@@ -595,7 +594,7 @@ func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blocksto
 	if err != nil {
 		return nil, xerrors.Errorf("serializing msgmeta failed: %w", err)
 	}
-	if err := bs.Put(mmb); err != nil {
+	if err := bs.Put(ctx, mmb); err != nil {
 		return nil, xerrors.Errorf("putting msgmeta block to blockstore: %w", err)
 	}
 
@@ -625,7 +624,7 @@ func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blocksto
 		return nil, xerrors.Errorf("filecoinGenesisCid != gblk.Cid")
 	}
 
-	if err := bs.Put(gblk); err != nil {
+	if err := bs.Put(ctx, gblk); err != nil {
 		return nil, xerrors.Errorf("failed writing filecoin genesis block to blockstore: %w", err)
 	}
 
@@ -656,7 +655,7 @@ func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blocksto
 		return nil, xerrors.Errorf("serializing block header failed: %w", err)
 	}
 
-	if err := bs.Put(sb); err != nil {
+	if err := bs.Put(ctx, sb); err != nil {
 		return nil, xerrors.Errorf("putting header to blockstore: %w", err)
 	}
 

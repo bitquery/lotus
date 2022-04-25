@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding"
+
 	"os"
 	"strconv"
 	"time"
@@ -46,6 +47,11 @@ func defCommon() Common {
 			ListenAddress: "/ip4/127.0.0.1/tcp/1234/http",
 			Timeout:       Duration(30 * time.Second),
 		},
+		Logging: Logging{
+			SubsystemLevels: map[string]string{
+				"example-subsystem": "INFO",
+			},
+		},
 		Libp2p: Libp2p{
 			ListenAddresses: []string{
 				"/ip4/0.0.0.0/tcp/0",
@@ -85,7 +91,7 @@ func DefaultFullNode() *FullNode {
 			Splitstore: Splitstore{
 				ColdStoreType: "universal",
 				HotStoreType:  "badger",
-				MarkSetType:   "map",
+				MarkSetType:   "badger",
 
 				HotStoreFullGCFrequency: 20,
 			},
@@ -104,6 +110,7 @@ func DefaultStorageMiner() *StorageMiner {
 			WaitDealsDelay:            Duration(time.Hour * 6),
 			AlwaysKeepUnsealedCopy:    true,
 			FinalizeEarly:             false,
+			MakeNewSectorForDeals:     true,
 
 			CollateralFromMinerBalance: false,
 			AvailableBalanceBuffer:     types.FIL(big.Zero()),
@@ -164,8 +171,9 @@ func DefaultStorageMiner() *StorageMiner {
 			MaxDealsPerPublishMsg:           8,
 			MaxProviderCollateralMultiplier: 2,
 
-			SimultaneousTransfersForStorage:   DefaultSimultaneousTransfers,
-			SimultaneousTransfersForRetrieval: DefaultSimultaneousTransfers,
+			SimultaneousTransfersForStorage:          DefaultSimultaneousTransfers,
+			SimultaneousTransfersForStoragePerClient: 0,
+			SimultaneousTransfersForRetrieval:        DefaultSimultaneousTransfers,
 
 			StartEpochSealingBuffer: 480, // 480 epochs buffer == 4 hours from adding deal to sector to sector being sealed
 
@@ -178,6 +186,14 @@ func DefaultStorageMiner() *StorageMiner {
 					Path: "",
 				},
 			},
+		},
+
+		IndexProvider: IndexProviderConfig{
+			Enable:               true,
+			EntriesCacheCapacity: 1024,
+			EntriesChunkSize:     16384,
+			TopicName:            "/indexer/ingest/mainnet",
+			PurgeCacheOnStart:    false,
 		},
 
 		Subsystems: MinerSubsystemConfig{
@@ -216,9 +232,11 @@ func DefaultStorageMiner() *StorageMiner {
 		DAGStore: DAGStoreConfig{
 			MaxConcurrentIndex:         5,
 			MaxConcurrencyStorageCalls: 100,
+			MaxConcurrentUnseals:       5,
 			GCInterval:                 Duration(1 * time.Minute),
 		},
 	}
+
 	cfg.Common.API.ListenAddress = "/ip4/127.0.0.1/tcp/2345/http"
 	cfg.Common.API.RemoteListenAddress = "127.0.0.1:2345"
 	return cfg

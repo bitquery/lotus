@@ -306,7 +306,9 @@ type FullNodeStruct struct {
 
 		PaychCollect func(p0 context.Context, p1 address.Address) (cid.Cid, error) `perm:"sign"`
 
-		PaychGet func(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (*ChannelInfo, error) `perm:"sign"`
+		PaychFund func(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (*ChannelInfo, error) `perm:"sign"`
+
+		PaychGet func(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt, p4 PaychGetOpts) (*ChannelInfo, error) `perm:"sign"`
 
 		PaychGetWaitReady func(p0 context.Context, p1 cid.Cid) (address.Address, error) `perm:"sign"`
 
@@ -524,6 +526,8 @@ type GatewayStruct struct {
 
 		MsigGetVested func(p0 context.Context, p1 address.Address, p2 types.TipSetKey, p3 types.TipSetKey) (types.BigInt, error) ``
 
+		MsigGetVestingSchedule func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (MsigVesting, error) ``
+
 		StateAccountKey func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (address.Address, error) ``
 
 		StateDealProviderCollateralBounds func(p0 context.Context, p1 abi.PaddedPieceSize, p2 bool, p3 types.TipSetKey) (DealCollateralBounds, error) ``
@@ -597,11 +601,23 @@ type NetStruct struct {
 
 		NetFindPeer func(p0 context.Context, p1 peer.ID) (peer.AddrInfo, error) `perm:"read"`
 
+		NetLimit func(p0 context.Context, p1 string) (NetLimit, error) `perm:"read"`
+
 		NetPeerInfo func(p0 context.Context, p1 peer.ID) (*ExtendedPeerInfo, error) `perm:"read"`
 
 		NetPeers func(p0 context.Context) ([]peer.AddrInfo, error) `perm:"read"`
 
+		NetProtectAdd func(p0 context.Context, p1 []peer.ID) error `perm:"admin"`
+
+		NetProtectList func(p0 context.Context) ([]peer.ID, error) `perm:"read"`
+
+		NetProtectRemove func(p0 context.Context, p1 []peer.ID) error `perm:"admin"`
+
 		NetPubsubScores func(p0 context.Context) ([]PubsubScore, error) `perm:"read"`
+
+		NetSetLimit func(p0 context.Context, p1 string, p2 NetLimit) error `perm:"admin"`
+
+		NetStat func(p0 context.Context, p1 string) (NetStat, error) `perm:"read"`
 	}
 }
 
@@ -643,6 +659,8 @@ type StorageMinerStruct struct {
 
 		DagstoreListShards func(p0 context.Context) ([]DagstoreShardInfo, error) `perm:"read"`
 
+		DagstoreLookupPieces func(p0 context.Context, p1 cid.Cid) ([]DagstoreShardInfo, error) `perm:"admin"`
+
 		DagstoreRecoverShard func(p0 context.Context, p1 string) error `perm:"write"`
 
 		DealsConsiderOfflineRetrievalDeals func(p0 context.Context) (bool, error) `perm:"admin"`
@@ -677,7 +695,13 @@ type StorageMinerStruct struct {
 
 		DealsSetPieceCidBlocklist func(p0 context.Context, p1 []cid.Cid) error `perm:"admin"`
 
+		IndexerAnnounceAllDeals func(p0 context.Context) error `perm:"admin"`
+
+		IndexerAnnounceDeal func(p0 context.Context, p1 cid.Cid) error `perm:"admin"`
+
 		MarketCancelDataTransfer func(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error `perm:"write"`
+
+		MarketDataTransferDiagnostics func(p0 context.Context, p1 peer.ID) (*TransferDiagnostics, error) `perm:"write"`
 
 		MarketDataTransferUpdates func(p0 context.Context) (<-chan DataTransferChannel, error) `perm:"write"`
 
@@ -818,6 +842,8 @@ type StorageMinerStruct struct {
 		StorageDropSector func(p0 context.Context, p1 stores.ID, p2 abi.SectorID, p3 storiface.SectorFileType) error `perm:"admin"`
 
 		StorageFindSector func(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 abi.SectorSize, p4 bool) ([]stores.SectorStorageInfo, error) `perm:"admin"`
+
+		StorageGetLocks func(p0 context.Context) (storiface.SectorLocks, error) `perm:"admin"`
 
 		StorageInfo func(p0 context.Context, p1 stores.ID) (stores.StorageInfo, error) `perm:"admin"`
 
@@ -2185,14 +2211,25 @@ func (s *FullNodeStub) PaychCollect(p0 context.Context, p1 address.Address) (cid
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *FullNodeStruct) PaychGet(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (*ChannelInfo, error) {
+func (s *FullNodeStruct) PaychFund(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (*ChannelInfo, error) {
+	if s.Internal.PaychFund == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.PaychFund(p0, p1, p2, p3)
+}
+
+func (s *FullNodeStub) PaychFund(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (*ChannelInfo, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) PaychGet(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt, p4 PaychGetOpts) (*ChannelInfo, error) {
 	if s.Internal.PaychGet == nil {
 		return nil, ErrNotSupported
 	}
-	return s.Internal.PaychGet(p0, p1, p2, p3)
+	return s.Internal.PaychGet(p0, p1, p2, p3, p4)
 }
 
-func (s *FullNodeStub) PaychGet(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (*ChannelInfo, error) {
+func (s *FullNodeStub) PaychGet(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt, p4 PaychGetOpts) (*ChannelInfo, error) {
 	return nil, ErrNotSupported
 }
 
@@ -3306,6 +3343,17 @@ func (s *GatewayStub) MsigGetVested(p0 context.Context, p1 address.Address, p2 t
 	return *new(types.BigInt), ErrNotSupported
 }
 
+func (s *GatewayStruct) MsigGetVestingSchedule(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (MsigVesting, error) {
+	if s.Internal.MsigGetVestingSchedule == nil {
+		return *new(MsigVesting), ErrNotSupported
+	}
+	return s.Internal.MsigGetVestingSchedule(p0, p1, p2)
+}
+
+func (s *GatewayStub) MsigGetVestingSchedule(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (MsigVesting, error) {
+	return *new(MsigVesting), ErrNotSupported
+}
+
 func (s *GatewayStruct) StateAccountKey(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (address.Address, error) {
 	if s.Internal.StateAccountKey == nil {
 		return *new(address.Address), ErrNotSupported
@@ -3662,6 +3710,17 @@ func (s *NetStub) NetFindPeer(p0 context.Context, p1 peer.ID) (peer.AddrInfo, er
 	return *new(peer.AddrInfo), ErrNotSupported
 }
 
+func (s *NetStruct) NetLimit(p0 context.Context, p1 string) (NetLimit, error) {
+	if s.Internal.NetLimit == nil {
+		return *new(NetLimit), ErrNotSupported
+	}
+	return s.Internal.NetLimit(p0, p1)
+}
+
+func (s *NetStub) NetLimit(p0 context.Context, p1 string) (NetLimit, error) {
+	return *new(NetLimit), ErrNotSupported
+}
+
 func (s *NetStruct) NetPeerInfo(p0 context.Context, p1 peer.ID) (*ExtendedPeerInfo, error) {
 	if s.Internal.NetPeerInfo == nil {
 		return nil, ErrNotSupported
@@ -3684,6 +3743,39 @@ func (s *NetStub) NetPeers(p0 context.Context) ([]peer.AddrInfo, error) {
 	return *new([]peer.AddrInfo), ErrNotSupported
 }
 
+func (s *NetStruct) NetProtectAdd(p0 context.Context, p1 []peer.ID) error {
+	if s.Internal.NetProtectAdd == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.NetProtectAdd(p0, p1)
+}
+
+func (s *NetStub) NetProtectAdd(p0 context.Context, p1 []peer.ID) error {
+	return ErrNotSupported
+}
+
+func (s *NetStruct) NetProtectList(p0 context.Context) ([]peer.ID, error) {
+	if s.Internal.NetProtectList == nil {
+		return *new([]peer.ID), ErrNotSupported
+	}
+	return s.Internal.NetProtectList(p0)
+}
+
+func (s *NetStub) NetProtectList(p0 context.Context) ([]peer.ID, error) {
+	return *new([]peer.ID), ErrNotSupported
+}
+
+func (s *NetStruct) NetProtectRemove(p0 context.Context, p1 []peer.ID) error {
+	if s.Internal.NetProtectRemove == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.NetProtectRemove(p0, p1)
+}
+
+func (s *NetStub) NetProtectRemove(p0 context.Context, p1 []peer.ID) error {
+	return ErrNotSupported
+}
+
 func (s *NetStruct) NetPubsubScores(p0 context.Context) ([]PubsubScore, error) {
 	if s.Internal.NetPubsubScores == nil {
 		return *new([]PubsubScore), ErrNotSupported
@@ -3693,6 +3785,28 @@ func (s *NetStruct) NetPubsubScores(p0 context.Context) ([]PubsubScore, error) {
 
 func (s *NetStub) NetPubsubScores(p0 context.Context) ([]PubsubScore, error) {
 	return *new([]PubsubScore), ErrNotSupported
+}
+
+func (s *NetStruct) NetSetLimit(p0 context.Context, p1 string, p2 NetLimit) error {
+	if s.Internal.NetSetLimit == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.NetSetLimit(p0, p1, p2)
+}
+
+func (s *NetStub) NetSetLimit(p0 context.Context, p1 string, p2 NetLimit) error {
+	return ErrNotSupported
+}
+
+func (s *NetStruct) NetStat(p0 context.Context, p1 string) (NetStat, error) {
+	if s.Internal.NetStat == nil {
+		return *new(NetStat), ErrNotSupported
+	}
+	return s.Internal.NetStat(p0, p1)
+}
+
+func (s *NetStub) NetStat(p0 context.Context, p1 string) (NetStat, error) {
+	return *new(NetStat), ErrNotSupported
 }
 
 func (s *SignableStruct) Sign(p0 context.Context, p1 SignFunc) error {
@@ -3813,6 +3927,17 @@ func (s *StorageMinerStruct) DagstoreListShards(p0 context.Context) ([]DagstoreS
 }
 
 func (s *StorageMinerStub) DagstoreListShards(p0 context.Context) ([]DagstoreShardInfo, error) {
+	return *new([]DagstoreShardInfo), ErrNotSupported
+}
+
+func (s *StorageMinerStruct) DagstoreLookupPieces(p0 context.Context, p1 cid.Cid) ([]DagstoreShardInfo, error) {
+	if s.Internal.DagstoreLookupPieces == nil {
+		return *new([]DagstoreShardInfo), ErrNotSupported
+	}
+	return s.Internal.DagstoreLookupPieces(p0, p1)
+}
+
+func (s *StorageMinerStub) DagstoreLookupPieces(p0 context.Context, p1 cid.Cid) ([]DagstoreShardInfo, error) {
 	return *new([]DagstoreShardInfo), ErrNotSupported
 }
 
@@ -4003,6 +4128,28 @@ func (s *StorageMinerStub) DealsSetPieceCidBlocklist(p0 context.Context, p1 []ci
 	return ErrNotSupported
 }
 
+func (s *StorageMinerStruct) IndexerAnnounceAllDeals(p0 context.Context) error {
+	if s.Internal.IndexerAnnounceAllDeals == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.IndexerAnnounceAllDeals(p0)
+}
+
+func (s *StorageMinerStub) IndexerAnnounceAllDeals(p0 context.Context) error {
+	return ErrNotSupported
+}
+
+func (s *StorageMinerStruct) IndexerAnnounceDeal(p0 context.Context, p1 cid.Cid) error {
+	if s.Internal.IndexerAnnounceDeal == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.IndexerAnnounceDeal(p0, p1)
+}
+
+func (s *StorageMinerStub) IndexerAnnounceDeal(p0 context.Context, p1 cid.Cid) error {
+	return ErrNotSupported
+}
+
 func (s *StorageMinerStruct) MarketCancelDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error {
 	if s.Internal.MarketCancelDataTransfer == nil {
 		return ErrNotSupported
@@ -4012,6 +4159,17 @@ func (s *StorageMinerStruct) MarketCancelDataTransfer(p0 context.Context, p1 dat
 
 func (s *StorageMinerStub) MarketCancelDataTransfer(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error {
 	return ErrNotSupported
+}
+
+func (s *StorageMinerStruct) MarketDataTransferDiagnostics(p0 context.Context, p1 peer.ID) (*TransferDiagnostics, error) {
+	if s.Internal.MarketDataTransferDiagnostics == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.MarketDataTransferDiagnostics(p0, p1)
+}
+
+func (s *StorageMinerStub) MarketDataTransferDiagnostics(p0 context.Context, p1 peer.ID) (*TransferDiagnostics, error) {
+	return nil, ErrNotSupported
 }
 
 func (s *StorageMinerStruct) MarketDataTransferUpdates(p0 context.Context) (<-chan DataTransferChannel, error) {
@@ -4782,6 +4940,17 @@ func (s *StorageMinerStruct) StorageFindSector(p0 context.Context, p1 abi.Sector
 
 func (s *StorageMinerStub) StorageFindSector(p0 context.Context, p1 abi.SectorID, p2 storiface.SectorFileType, p3 abi.SectorSize, p4 bool) ([]stores.SectorStorageInfo, error) {
 	return *new([]stores.SectorStorageInfo), ErrNotSupported
+}
+
+func (s *StorageMinerStruct) StorageGetLocks(p0 context.Context) (storiface.SectorLocks, error) {
+	if s.Internal.StorageGetLocks == nil {
+		return *new(storiface.SectorLocks), ErrNotSupported
+	}
+	return s.Internal.StorageGetLocks(p0)
+}
+
+func (s *StorageMinerStub) StorageGetLocks(p0 context.Context) (storiface.SectorLocks, error) {
+	return *new(storiface.SectorLocks), ErrNotSupported
 }
 
 func (s *StorageMinerStruct) StorageInfo(p0 context.Context, p1 stores.ID) (stores.StorageInfo, error) {

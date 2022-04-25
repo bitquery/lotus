@@ -47,7 +47,6 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	cborutil "github.com/filecoin-project/go-cbor-util"
-	"github.com/filecoin-project/go-commp-utils/ffiwrapper"
 	"github.com/filecoin-project/go-commp-utils/writer"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 
@@ -150,7 +149,7 @@ func (a *API) dealStarter(ctx context.Context, params *api.StartDealParams, isSt
 		if err != nil {
 			return nil, xerrors.Errorf("failed to find blockstore for root CID: %w", err)
 		}
-		if has, err := bs.Has(params.Data.Root); err != nil {
+		if has, err := bs.Has(ctx, params.Data.Root); err != nil {
 			return nil, xerrors.Errorf("failed to query blockstore for root CID: %w", err)
 		} else if !has {
 			return nil, xerrors.Errorf("failed to find root CID in blockstore: %w", err)
@@ -490,6 +489,7 @@ func (a *API) makeRetrievalQuery(ctx context.Context, rp rm.RetrievalPeer, paylo
 		Size:                    queryResponse.Size,
 		MinPrice:                queryResponse.PieceRetrievalPrice(),
 		UnsealPrice:             queryResponse.UnsealPrice,
+		PricePerByte:            queryResponse.MinPricePerByte,
 		PaymentInterval:         queryResponse.MaxPaymentInterval,
 		PaymentIntervalIncrease: queryResponse.MaxPaymentIntervalIncrease,
 		Miner:                   queryResponse.PaymentAddress, // TODO: check
@@ -520,7 +520,7 @@ func (a *API) ClientImport(ctx context.Context, ref api.FileRef) (res *api.Impor
 		}
 		defer f.Close() //nolint:errcheck
 
-		hd, _, err := car.ReadHeader(bufio.NewReader(f))
+		hd, err := car.ReadHeader(bufio.NewReader(f))
 		if err != nil {
 			return nil, xerrors.Errorf("failed to read CAR header: %w", err)
 		}
@@ -1028,7 +1028,7 @@ func (a *API) outputCAR(ctx context.Context, ds format.DAGService, bs bstore.Blo
 						}
 
 						if cs.Visit(c) {
-							nb, err := bs.Get(c)
+							nb, err := bs.Get(ctx, c)
 							if err != nil {
 								return xerrors.Errorf("getting block data: %w", err)
 							}
@@ -1262,30 +1262,14 @@ func (a *API) ClientQueryAsk(ctx context.Context, p peer.ID, miner address.Addre
 }
 
 func (a *API) ClientCalcCommP(ctx context.Context, inpath string) (*api.CommPRet, error) {
-
-	// Hard-code the sector type to 32GiBV1_1, because:
-	// - ffiwrapper.GeneratePieceCIDFromFile requires a RegisteredSealProof
-	// - commP itself is sector-size independent, with rather low probability of that changing
-	//   ( note how the final rust call is identical for every RegSP type )
-	//   https://github.com/filecoin-project/rust-filecoin-proofs-api/blob/v5.0.0/src/seal.rs#L1040-L1050
-	//
-	// IF/WHEN this changes in the future we will have to be able to calculate
-	// "old style" commP, and thus will need to introduce a version switch or similar
-	arbitraryProofType := abi.RegisteredSealProof_StackedDrg32GiBV1_1
-
 	rdr, err := os.Open(inpath)
 	if err != nil {
 		return nil, err
 	}
 	defer rdr.Close() //nolint:errcheck
 
-	stat, err := rdr.Stat()
-	if err != nil {
-		return nil, err
-	}
-
 	// check that the data is a car file; if it's not, retrieval won't work
-	_, _, err = car.ReadHeader(bufio.NewReader(rdr))
+	_, err = car.ReadHeader(bufio.NewReader(rdr))
 	if err != nil {
 		return nil, xerrors.Errorf("not a car file: %w", err)
 	}
@@ -1294,16 +1278,20 @@ func (a *API) ClientCalcCommP(ctx context.Context, inpath string) (*api.CommPRet
 		return nil, xerrors.Errorf("seek to start: %w", err)
 	}
 
-	pieceReader, pieceSize := padreader.New(rdr, uint64(stat.Size()))
-	commP, err := ffiwrapper.GeneratePieceCIDFromFile(arbitraryProofType, pieceReader, pieceSize)
+	w := &writer.Writer{}
+	_, err = io.CopyBuffer(w, rdr, make([]byte, writer.CommPBuf))
+	if err != nil {
+		return nil, xerrors.Errorf("copy into commp writer: %w", err)
+	}
 
+	commp, err := w.Sum()
 	if err != nil {
 		return nil, xerrors.Errorf("computing commP failed: %w", err)
 	}
 
 	return &api.CommPRet{
-		Root: commP,
-		Size: pieceSize,
+		Root: commp.PieceCID,
+		Size: commp.PieceSize.Unpadded(),
 	}, nil
 }
 

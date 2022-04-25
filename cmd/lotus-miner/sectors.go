@@ -161,7 +161,7 @@ var sectorsStatusCmd = &cli.Command{
 			fmt.Printf("Expiration:\t\t%v\n", status.Expiration)
 			fmt.Printf("DealWeight:\t\t%v\n", status.DealWeight)
 			fmt.Printf("VerifiedDealWeight:\t\t%v\n", status.VerifiedDealWeight)
-			fmt.Printf("InitialPledge:\t\t%v\n", status.InitialPledge)
+			fmt.Printf("InitialPledge:\t\t%v\n", types.FIL(status.InitialPledge))
 			fmt.Printf("\nExpiration Info\n")
 			fmt.Printf("OnTime:\t\t%v\n", status.OnTime)
 			fmt.Printf("Early:\t\t%v\n", status.Early)
@@ -294,8 +294,14 @@ var sectorsListCmd = &cli.Command{
 			Aliases: []string{"e"},
 		},
 		&cli.BoolFlag{
-			Name:  "seal-time",
-			Usage: "display how long it took for the sector to be sealed",
+			Name:    "initial-pledge",
+			Usage:   "display initial pledge",
+			Aliases: []string{"p"},
+		},
+		&cli.BoolFlag{
+			Name:    "seal-time",
+			Usage:   "display how long it took for the sector to be sealed",
+			Aliases: []string{"t"},
 		},
 		&cli.StringFlag{
 			Name:  "states",
@@ -345,7 +351,7 @@ var sectorsListCmd = &cli.Command{
 
 		if cctx.Bool("unproven") {
 			for state := range sealing.ExistSectorStateList {
-				if state == sealing.Proving {
+				if state == sealing.Proving || state == sealing.Available {
 					continue
 				}
 				states = append(states, api.SectorState(state))
@@ -405,6 +411,7 @@ var sectorsListCmd = &cli.Command{
 			tablewriter.Col("Deals"),
 			tablewriter.Col("DealWeight"),
 			tablewriter.Col("VerifiedPower"),
+			tablewriter.Col("Pledge"),
 			tablewriter.NewLineCol("Error"),
 			tablewriter.NewLineCol("RecoveryTimeout"))
 
@@ -482,6 +489,9 @@ var sectorsListCmd = &cli.Command{
 					if st.Early > 0 {
 						m["RecoveryTimeout"] = color.YellowString(lcli.EpochTime(head.Height(), st.Early))
 					}
+				}
+				if inSSet && cctx.Bool("initial-pledge") {
+					m["Pledge"] = types.FIL(st.InitialPledge).Short()
 				}
 			}
 
@@ -1594,7 +1604,6 @@ var sectorsMarkForUpgradeCmd = &cli.Command{
 		if err != nil {
 			return xerrors.Errorf("failed to get chain head: %w", err)
 		}
-
 		twoDays := abi.ChainEpoch(2 * builtin.EpochsInDay)
 		if head.Height() > (build.UpgradeOhSnapHeight - twoDays) {
 			return xerrors.Errorf("OhSnap is coming soon, " +
@@ -1755,6 +1764,11 @@ var sectorsUpdateCmd = &cli.Command{
 		id, err := strconv.ParseUint(cctx.Args().Get(0), 10, 64)
 		if err != nil {
 			return xerrors.Errorf("could not parse sector number: %w", err)
+		}
+
+		_, err = nodeApi.SectorsStatus(ctx, abi.SectorNumber(id), false)
+		if err != nil {
+			return xerrors.Errorf("sector %d not found, could not change state", id)
 		}
 
 		newState := cctx.Args().Get(1)

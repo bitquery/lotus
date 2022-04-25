@@ -13,10 +13,11 @@ import (
 
 // Common is common config between full node and miner
 type Common struct {
-	API    API
-	Backup Backup
-	Libp2p Libp2p
-	Pubsub Pubsub
+	API     API
+	Backup  Backup
+	Logging Logging
+	Libp2p  Libp2p
+	Pubsub  Pubsub
 }
 
 // FullNode is a full node config
@@ -39,17 +40,24 @@ type Backup struct {
 	DisableMetadataLog bool
 }
 
+// Logging is the logging system config
+type Logging struct {
+	// SubsystemLevels specify per-subsystem log levels
+	SubsystemLevels map[string]string
+}
+
 // StorageMiner is a miner config
 type StorageMiner struct {
 	Common
 
-	Subsystems MinerSubsystemConfig
-	Dealmaking DealmakingConfig
-	Sealing    SealingConfig
-	Storage    sectorstorage.SealerConfig
-	Fees       MinerFeeConfig
-	Addresses  MinerAddressConfig
-	DAGStore   DAGStoreConfig
+	Subsystems    MinerSubsystemConfig
+	Dealmaking    DealmakingConfig
+	IndexProvider IndexProviderConfig
+	Sealing       SealingConfig
+	Storage       sectorstorage.SealerConfig
+	Fees          MinerFeeConfig
+	Addresses     MinerAddressConfig
+	DAGStore      DAGStoreConfig
 }
 
 type DAGStoreConfig struct {
@@ -74,6 +82,11 @@ type DAGStoreConfig struct {
 	// from the storage subsystem. 0 means unlimited.
 	// Default value: 0 (unlimited).
 	MaxConcurrentReadyFetches int
+
+	// The maximum amount of unseals that can be processed simultaneously
+	// from the storage subsystem. 0 means unlimited.
+	// Default value: 0 (unlimited).
+	MaxConcurrentUnseals int
 
 	// The maximum number of simultaneous inflight API calls to the storage
 	// subsystem.
@@ -131,6 +144,13 @@ type DealmakingConfig struct {
 	MaxStagingDealsBytes int64
 	// The maximum number of parallel online data transfers for storage deals
 	SimultaneousTransfersForStorage uint64
+	// The maximum number of simultaneous data transfers from any single client
+	// for storage deals.
+	// Unset by default (0), and values higher than SimultaneousTransfersForStorage
+	// will have no effect; i.e. the total number of simultaneous data transfers
+	// across all storage clients is bound by SimultaneousTransfersForStorage
+	// regardless of this number.
+	SimultaneousTransfersForStoragePerClient uint64
 	// The maximum number of parallel online data transfers for retrieval deals
 	SimultaneousTransfersForRetrieval uint64
 	// Minimum start epoch buffer to give time for sealing of sector with deal.
@@ -144,6 +164,35 @@ type DealmakingConfig struct {
 	RetrievalFilter string
 
 	RetrievalPricing *RetrievalPricing
+}
+
+type IndexProviderConfig struct {
+
+	// Enable set whether to enable indexing announcement to the network and expose endpoints that
+	// allow indexer nodes to process announcements. Disabled by default.
+	Enable bool
+
+	// EntriesCacheCapacity sets the maximum capacity to use for caching the indexing advertisement
+	// entries. Defaults to 1024 if not specified. The cache is evicted using LRU policy. The
+	// maximum storage used by the cache is a factor of EntriesCacheCapacity, EntriesChunkSize and
+	// the length of multihashes being advertised. For example, advertising 128-bit long multihashes
+	// with the default EntriesCacheCapacity, and EntriesChunkSize means the cache size can grow to
+	// 256MiB when full.
+	EntriesCacheCapacity int
+
+	// EntriesChunkSize sets the maximum number of multihashes to include in a single entries chunk.
+	// Defaults to 16384 if not specified. Note that chunks are chained together for indexing
+	// advertisements that include more multihashes than the configured EntriesChunkSize.
+	EntriesChunkSize int
+
+	// TopicName sets the topic name on which the changes to the advertised content are announced.
+	// Defaults to '/indexer/ingest/mainnet' if not specified.
+	TopicName string
+
+	// PurgeCacheOnStart sets whether to clear any cached entries chunks when the provider engine
+	// starts. By default, the cache is rehydrated from previously cached entries stored in
+	// datastore if any is present.
+	PurgeCacheOnStart bool
 }
 
 type RetrievalPricing struct {
@@ -196,6 +245,14 @@ type SealingConfig struct {
 
 	// Run sector finalization before submitting sector proof to the chain
 	FinalizeEarly bool
+
+	// Whether new sectors are created to pack incoming deals
+	// When this is set to false no new sectors will be created for sealing incoming deals
+	// This is useful for forcing all deals to be assigned as snap deals to sectors marked for upgrade
+	MakeNewSectorForDeals bool
+
+	// After sealing CC sectors, make them available for upgrading with deals
+	MakeCCSectorsAvailable bool
 
 	// Whether to use available miner balance for sector collateral instead of sending it with each message
 	CollateralFromMinerBalance bool
@@ -347,7 +404,7 @@ type Splitstore struct {
 	// Only currently supported value is "badger".
 	HotStoreType string
 	// MarkSetType specifies the type of the markset.
-	// It can be "map" (default) for in memory marking or "badger" for on-disk marking.
+	// It can be "map" for in memory marking or "badger" (default) for on-disk marking.
 	MarkSetType string
 
 	// HotStoreMessageRetention specifies the retention policy for messages, in finalities beyond
@@ -371,6 +428,11 @@ type Client struct {
 	// The maximum number of simultaneous data transfers between the client
 	// and storage providers for retrieval deals
 	SimultaneousTransfersForRetrieval uint64
+
+	// Require that retrievals perform no on-chain operations. Paid retrievals
+	// without existing payment channels with available funds will fail instead
+	// of automatically performing on-chain operations.
+	OffChainRetrieval bool
 }
 
 type Wallet struct {
