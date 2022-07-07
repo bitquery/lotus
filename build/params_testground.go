@@ -17,6 +17,7 @@ import (
 
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 )
 
@@ -33,6 +34,12 @@ var (
 	MinimumBaseFee        = int64(100)
 	BlockDelaySecs        = uint64(builtin2.EpochDurationSeconds)
 	PropagationDelaySecs  = uint64(6)
+	SupportedProofTypes   = []abi.RegisteredSealProof{
+		abi.RegisteredSealProof_StackedDrg32GiBV1,
+		abi.RegisteredSealProof_StackedDrg64GiBV1,
+	}
+	ConsensusMinerMinPower  = abi.NewStoragePower(10 << 40)
+	PreCommitChallengeDelay = abi.ChainEpoch(150)
 
 	AllowableClockDriftSecs = uint64(1)
 
@@ -100,12 +107,15 @@ var (
 	UpgradeHyperdriveHeight abi.ChainEpoch = -15
 	UpgradeChocolateHeight  abi.ChainEpoch = -16
 	UpgradeOhSnapHeight     abi.ChainEpoch = -17
+	UpgradeSkyrHeight       abi.ChainEpoch = -18
 
 	DrandSchedule = map[abi.ChainEpoch]DrandEnum{
 		0: DrandMainnet,
 	}
 
 	GenesisNetworkVersion = network.Version0
+	NetworkBundle         = "devnet"
+	BundleOverrides       map[actors.Version]string
 
 	NewestNetworkVersion       = network.Version15
 	ActorUpgradeNetworkVersion = network.Version15

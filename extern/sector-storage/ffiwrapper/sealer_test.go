@@ -15,11 +15,9 @@ import (
 	"testing"
 	"time"
 
-	commpffi "github.com/filecoin-project/go-commp-utils/ffiwrapper"
+	prooftypes "github.com/filecoin-project/go-state-types/proof"
 
-	proof2 "github.com/filecoin-project/specs-actors/v2/actors/runtime/proof"
-	proof5 "github.com/filecoin-project/specs-actors/v5/actors/runtime/proof"
-	proof7 "github.com/filecoin-project/specs-actors/v7/actors/runtime/proof"
+	commpffi "github.com/filecoin-project/go-commp-utils/ffiwrapper"
 
 	"github.com/ipfs/go-cid"
 
@@ -32,7 +30,7 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 
 	ffi "github.com/filecoin-project/filecoin-ffi"
-	"github.com/filecoin-project/filecoin-ffi/generated"
+	"github.com/filecoin-project/filecoin-ffi/cgo"
 
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper/basicfs"
@@ -71,18 +69,21 @@ func (s *seal) precommit(t *testing.T, sb *Sealer, id storage.SectorRef, done fu
 	r := data(id.ID.Number, dlen)
 	s.pi, err = sb.AddPiece(context.TODO(), id, []abi.UnpaddedPieceSize{}, dlen, r)
 	if err != nil {
-		t.Fatalf("%+v", err)
+		t.Errorf("%+v", err)
+		return
 	}
 
 	s.ticket = sealRand
 
 	p1, err := sb.SealPreCommit1(context.TODO(), id, s.ticket, []abi.PieceInfo{s.pi})
 	if err != nil {
-		t.Fatalf("%+v", err)
+		t.Errorf("%+v", err)
+		return
 	}
 	cids, err := sb.SealPreCommit2(context.TODO(), id, p1)
 	if err != nil {
-		t.Fatalf("%+v", err)
+		t.Errorf("%+v", err)
+		return
 	}
 	s.cids = cids
 }
@@ -94,14 +95,16 @@ func (s *seal) commit(t *testing.T, sb *Sealer, done func()) storage.Proof {
 
 	pc1, err := sb.SealCommit1(context.TODO(), s.ref, s.ticket, seed, []abi.PieceInfo{s.pi}, s.cids)
 	if err != nil {
-		t.Fatalf("%+v", err)
+		t.Errorf("%+v", err)
+		return nil
 	}
 	proof, err := sb.SealCommit2(context.TODO(), s.ref, pc1)
 	if err != nil {
-		t.Fatalf("%+v", err)
+		t.Errorf("%+v", err)
+		return nil
 	}
 
-	ok, err := ProofVerifier.VerifySeal(proof2.SealVerifyInfo{
+	ok, err := ProofVerifier.VerifySeal(prooftypes.SealVerifyInfo{
 		SectorID:              s.ref.ID,
 		SealedCID:             s.cids.Sealed,
 		SealProof:             s.ref.ProofType,
@@ -111,11 +114,13 @@ func (s *seal) commit(t *testing.T, sb *Sealer, done func()) storage.Proof {
 		UnsealedCID:           s.cids.Unsealed,
 	})
 	if err != nil {
-		t.Fatalf("%+v", err)
+		t.Errorf("%+v", err)
+		return nil
 	}
 
 	if !ok {
-		t.Fatal("proof failed to validate")
+		t.Errorf("proof failed to validate")
+		return nil
 	}
 
 	return proof
@@ -181,9 +186,9 @@ func (s *seal) unseal(t *testing.T, sb *Sealer, sp *basicfs.Provider, si storage
 func post(t *testing.T, sealer *Sealer, skipped []abi.SectorID, seals ...seal) {
 	randomness := abi.PoStRandomness{0, 9, 2, 7, 6, 5, 4, 3, 2, 1, 0, 9, 8, 7, 6, 45, 3, 2, 1, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 9, 7}
 
-	xsis := make([]proof7.ExtendedSectorInfo, len(seals))
+	xsis := make([]prooftypes.ExtendedSectorInfo, len(seals))
 	for i, s := range seals {
-		xsis[i] = proof7.ExtendedSectorInfo{
+		xsis[i] = prooftypes.ExtendedSectorInfo{
 			SealProof:    s.ref.ProofType,
 			SectorNumber: s.ref.ID.Number,
 			SealedCID:    s.cids.Sealed,
@@ -201,16 +206,16 @@ func post(t *testing.T, sealer *Sealer, skipped []abi.SectorID, seals ...seal) {
 		t.Fatalf("%+v", err)
 	}
 
-	sis := make([]proof7.SectorInfo, len(seals))
+	sis := make([]prooftypes.SectorInfo, len(seals))
 	for i, xsi := range xsis {
-		sis[i] = proof7.SectorInfo{
+		sis[i] = prooftypes.SectorInfo{
 			SealProof:    xsi.SealProof,
 			SectorNumber: xsi.SectorNumber,
 			SealedCID:    xsi.SealedCID,
 		}
 	}
 
-	ok, err := ProofVerifier.VerifyWindowPoSt(context.TODO(), proof7.WindowPoStVerifyInfo{
+	ok, err := ProofVerifier.VerifyWindowPoSt(context.TODO(), prooftypes.WindowPoStVerifyInfo{
 		Randomness:        randomness,
 		Proofs:            proofs,
 		ChallengedSectors: sis,
@@ -458,17 +463,17 @@ func TestSealAndVerify3(t *testing.T) {
 	s3 := seal{ref: si3}
 
 	wg.Add(3)
-	go s1.precommit(t, sb, si1, wg.Done) //nolint: staticcheck
+	go s1.precommit(t, sb, si1, wg.Done)
 	time.Sleep(100 * time.Millisecond)
-	go s2.precommit(t, sb, si2, wg.Done) //nolint: staticcheck
+	go s2.precommit(t, sb, si2, wg.Done)
 	time.Sleep(100 * time.Millisecond)
-	go s3.precommit(t, sb, si3, wg.Done) //nolint: staticcheck
+	go s3.precommit(t, sb, si3, wg.Done)
 	wg.Wait()
 
 	wg.Add(3)
-	go s1.commit(t, sb, wg.Done) //nolint: staticcheck
-	go s2.commit(t, sb, wg.Done) //nolint: staticcheck
-	go s3.commit(t, sb, wg.Done) //nolint: staticcheck
+	go s1.commit(t, sb, wg.Done)
+	go s2.commit(t, sb, wg.Done)
+	go s3.commit(t, sb, wg.Done)
 	wg.Wait()
 
 	post(t, sb, nil, s1, s2, s3)
@@ -518,12 +523,12 @@ func TestSealAndVerifyAggregate(t *testing.T) {
 		}
 	})
 
-	avi := proof5.AggregateSealVerifyProofAndInfos{
+	avi := prooftypes.AggregateSealVerifyProofAndInfos{
 		Miner:          miner,
 		SealProof:      sealProofType,
 		AggregateProof: policy.GetDefaultAggregationProof(),
 		Proof:          nil,
-		Infos:          make([]proof5.AggregateSealVerifyInfo, numAgg),
+		Infos:          make([]prooftypes.AggregateSealVerifyInfo, numAgg),
 	}
 
 	toAggregate := make([][]byte, numAgg)
@@ -537,7 +542,7 @@ func TestSealAndVerifyAggregate(t *testing.T) {
 		s.precommit(t, sb, si, func() {})
 		toAggregate[i] = s.commit(t, sb, func() {})
 
-		avi.Infos[i] = proof5.AggregateSealVerifyInfo{
+		avi.Infos[i] = prooftypes.AggregateSealVerifyInfo{
 			Number:                abi.SectorNumber(i + 1),
 			Randomness:            s.ticket,
 			InteractiveRandomness: seed,
@@ -876,14 +881,8 @@ func setupLogger(t *testing.T) *bytes.Buffer {
 		runtime.KeepAlive(w)
 	}()
 
-	resp := generated.FilInitLogFd(int32(w.Fd()))
-	resp.Deref()
-
-	defer generated.FilDestroyInitLogFdResponse(resp)
-
-	if resp.StatusCode != generated.FCPResponseStatusFCPNoError {
-		t.Fatal(generated.RawString(resp.ErrorMsg).Copy())
-	}
+	err = cgo.InitLogFd(int32(w.Fd()))
+	require.NoError(t, err)
 
 	return &bb
 }

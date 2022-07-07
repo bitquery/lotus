@@ -48,3 +48,6 @@ bin/ipget
 bin/tmp/*
 .idea
 scratchpad
+
+build/builtin-actors/v*
+build/builtin-actors/*.car

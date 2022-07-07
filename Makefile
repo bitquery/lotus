@@ -10,7 +10,7 @@ GOCC?=go
 GOVERSION:=$(shell $(GOCC) version | tr ' ' '\n' | grep go1 | sed 's/^go//' | awk -F. '{printf "%d%03d%03d", $$1, $$2, $$3}')
 ifeq ($(shell expr $(GOVERSION) \< 1016000), 1)
 $(warning Your Golang version is go$(shell expr $(GOVERSION) / 1000000).$(shell expr $(GOVERSION) % 1000000 / 1000).$(shell expr $(GOVERSION) % 1000))
-$(error Update Golang to version to at least 1.16.0)
+$(error Update Golang to version to at least 1.17.9)
 endif
 
 # git modules that need to be loaded
@@ -64,7 +64,7 @@ CLEAN+=build/.update-modules
 deps: $(BUILD_DEPS)
 .PHONY: deps
 
-build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway
+build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway lotus-fountain lotus-stats
 .PHONY: build-devnets
 
 debug: GOFLAGS+=-tags=debug
@@ -169,7 +169,7 @@ BINS+=lotus-fountain
 
 lotus-bench:
 	rm -f lotus-bench
-	$(GOCC) build -o lotus-bench ./cmd/lotus-bench
+	$(GOCC) build $(GOFLAGS) -o lotus-bench ./cmd/lotus-bench
 .PHONY: lotus-bench
 BINS+=lotus-bench
 
@@ -193,7 +193,7 @@ BINS+=lotus-health
 
 lotus-wallet:
 	rm -f lotus-wallet
-	$(GOCC) build -o lotus-wallet ./cmd/lotus-wallet
+	$(GOCC) build $(GOFLAGS) -o lotus-wallet ./cmd/lotus-wallet
 .PHONY: lotus-wallet
 BINS+=lotus-wallet
 
@@ -295,6 +295,12 @@ actors-gen:
 	$(GOCC) run ./chain/actors/agen
 	$(GOCC) fmt ./...
 
+bundle-gen:
+	$(GOCC) run ./gen/bundle
+	$(GOCC) fmt ./build/...
+.PHONY: bundle-gen
+
+
 api-gen:
 	$(GOCC) run ./gen/api
 	goimports -w api
@@ -341,7 +347,7 @@ docsgen-openrpc-worker: docsgen-openrpc-bin
 
 .PHONY: docsgen docsgen-md-bin docsgen-openrpc-bin
 
-gen: actors-gen type-gen method-gen cfgdoc-gen docsgen api-gen circleci
+gen: actors-gen type-gen method-gen cfgdoc-gen docsgen api-gen circleci bundle-gen
 	@echo ">>> IF YOU'VE MODIFIED THE CLI OR CONFIG, REMEMBER TO ALSO MAKE docsgen-cli"
 .PHONY: gen
 
