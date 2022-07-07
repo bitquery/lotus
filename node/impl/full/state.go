@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.uber.org/fx"
+	"golang.org/x/xerrors"
 	"strconv"
 
 	"github.com/filecoin-project/lotus/chain/actors"
@@ -14,10 +16,8 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 
 	"github.com/filecoin-project/go-state-types/cbor"
-	cboripld "github.com/ipfs/go-ipld-cbor"
 	"github.com/ipfs/go-cid"
-	"go.uber.org/fx"
-	"golang.org/x/xerrors"
+	cboripld "github.com/ipfs/go-ipld-cbor"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
@@ -415,7 +415,7 @@ func (a *StateAPI) StateCall(ctx context.Context, msg *types.Message, tsk types.
 }
 
 func (a *StateAPI) StateMultiCall(ctx context.Context, msgs []*types.Message, tsk types.TipSetKey) ([]*api.InvocResult, error) {
-	base_ts, err := a.Chain.GetTipSetFromKey(tsk)
+	base_ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
@@ -428,7 +428,7 @@ func (a *StateAPI) StateMultiCall(ctx context.Context, msgs []*types.Message, ts
 			if err != stmgr.ErrExpensiveFork {
 				break
 			}
-			ts, err = a.Chain.GetTipSetFromKey(ts.Parents())
+			ts, err = a.Chain.GetTipSetFromKey(ctx, ts.Parents())
 			if err != nil {
 				return nil, xerrors.Errorf("getting parent tipset: %w", err)
 			}
@@ -507,7 +507,7 @@ func (a *StateAPI) StateMultiReplay(ctx context.Context, tsk types.TipSetKey) ([
 	var ts *types.TipSet
 	var err error
 
-	ts, err = a.Chain.LoadTipSet(tsk)
+	ts, err = a.Chain.LoadTipSet(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading specified tipset %s: %w", tsk, err)
 	}
@@ -537,7 +537,7 @@ func (m *StateModule) stateForTs(ctx context.Context, ts *types.TipSet) (*state.
 }
 
 func (m *StateModule) StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) {
-	ts, err := m.Chain.GetTipSetFromKey(tsk)
+	ts, err := m.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
@@ -650,7 +650,7 @@ func (a *StateAPI) StateEncodeParams(ctx context.Context, toActCode cid.Cid, met
 
 func (a *StateAPI) StateMultiDecodeParams(ctx context.Context, toAddrs []address.Address, methods []abi.MethodNum, params [][]byte, tsk types.TipSetKey) ([]interface{}, error) {
 
-	ts, err := a.Chain.GetTipSetFromKey(tsk)
+	ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
@@ -664,14 +664,14 @@ func (a *StateAPI) StateMultiDecodeParams(ctx context.Context, toAddrs []address
 		return nil, xerrors.Errorf("Array sizes are not equal: toAddrs: %v methods: %v params: %v ", len(toAddrs), len(methods), len(params))
 	}
 
-    acctRegistry := a.TsExec.NewActorRegistry()
+	acctRegistry := a.TsExec.NewActorRegistry()
 	array := make([]interface{}, len(toAddrs))
 	for index, toAddr := range toAddrs {
 		act, err := state.GetActor(toAddr)
 		if err != nil {
 			array[index] = nil
 		} else {
-			paramType, err := stmgr.GetParamType(acctRegistry,act.Code, methods[index])
+			paramType, err := stmgr.GetParamType(acctRegistry, act.Code, methods[index])
 			if err != nil {
 				array[index] = nil
 			} else {
