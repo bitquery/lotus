@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestBaseFee(t *testing.T) {
@@ -24,7 +25,7 @@ func TestBaseFee(t *testing.T) {
 		{100e6, build.BlockGasTarget, 1, 103.125e6, 100e6},
 		{100e6, build.BlockGasTarget * 2, 2, 103.125e6, 100e6},
 		{100e6, build.BlockGasLimit * 2, 2, 112.5e6, 112.5e6},
-		{100e6, build.BlockGasLimit * 1.5, 2, 110937500, 106.250e6},
+		{100e6, (build.BlockGasLimit * 15) / 10, 2, 110937500, 106.250e6},
 	}
 
 	for _, test := range tests {

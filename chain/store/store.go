@@ -10,25 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
-
-	"github.com/filecoin-project/lotus/api"
-	bstore "github.com/filecoin-project/lotus/blockstore"
-	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/actors/adt"
-	"github.com/filecoin-project/lotus/journal"
-	"github.com/filecoin-project/lotus/metrics"
-
-	"go.opencensus.io/stats"
-	"go.opencensus.io/trace"
-	"go.uber.org/multierr"
-
-	"github.com/filecoin-project/lotus/chain/types"
-
-	"github.com/filecoin-project/pubsub"
 	lru "github.com/hashicorp/golang-lru"
 	block "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
@@ -36,7 +17,23 @@ import (
 	"github.com/ipfs/go-datastore/query"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/trace"
+	"go.uber.org/multierr"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/pubsub"
+
+	"github.com/filecoin-project/lotus/api"
+	bstore "github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/journal"
+	"github.com/filecoin-project/lotus/metrics"
 )
 
 var log = logging.Logger("chainstore")
@@ -96,8 +93,8 @@ type WeightFunc func(ctx context.Context, stateBs bstore.Blockstore, ts *types.T
 // store).
 //
 // To alleviate disk access, the ChainStore has two ARC caches:
-//   1. a tipset cache
-//   2. a block => messages references cache.
+//  1. a tipset cache
+//  2. a block => messages references cache.
 type ChainStore struct {
 	chainBlockstore bstore.Blockstore
 	stateBlockstore bstore.Blockstore
@@ -456,8 +453,9 @@ func (cs *ChainStore) MaybeTakeHeavierTipSet(ctx context.Context, ts *types.TipS
 // The "fast forward" case is covered in this logic as a valid fork of length 0.
 //
 // FIXME: We may want to replace some of the logic in `syncFork()` with this.
-//  `syncFork()` counts the length on both sides of the fork at the moment (we
-//  need to settle on that) but here we just enforce it on the `synced` side.
+//
+//	`syncFork()` counts the length on both sides of the fork at the moment (we
+//	need to settle on that) but here we just enforce it on the `synced` side.
 func (cs *ChainStore) exceedsForkLength(ctx context.Context, synced, external *types.TipSet) (bool, error) {
 	if synced == nil || external == nil {
 		// FIXME: If `cs.heaviest` is nil we should just bypass the entire

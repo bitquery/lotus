@@ -4,21 +4,24 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/builtin"
-	minertypes "github.com/filecoin-project/go-state-types/builtin/v8/miner"
+	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-bitfield"
+	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/builtin"
+	minertypes "github.com/filecoin-project/go-state-types/builtin/v8/miner"
 	"github.com/filecoin-project/go-state-types/dline"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/miner"
-	"github.com/stretchr/testify/require"
 )
 
 // BlockMiner is a utility that makes a test miner Mine blocks on a timer.
@@ -27,15 +30,19 @@ type BlockMiner struct {
 	miner *TestMiner
 
 	nextNulls int64
+	pause     chan struct{}
+	unpause   chan struct{}
 	wg        sync.WaitGroup
 	cancel    context.CancelFunc
 }
 
 func NewBlockMiner(t *testing.T, miner *TestMiner) *BlockMiner {
 	return &BlockMiner{
-		t:      t,
-		miner:  miner,
-		cancel: func() {},
+		t:       t,
+		miner:   miner,
+		cancel:  func() {},
+		unpause: make(chan struct{}),
+		pause:   make(chan struct{}),
 	}
 }
 
@@ -183,7 +190,12 @@ func (bm *BlockMiner) MineBlocksMustPost(ctx context.Context, blocktime time.Dur
 
 			var target abi.ChainEpoch
 			reportSuccessFn := func(success bool, epoch abi.ChainEpoch, err error) {
-				require.NoError(bm.t, err)
+				// if api shuts down before mining, we may get an error which we should probably just ignore
+				// (fixing it will require rewriting most of the mining loop)
+				if err != nil && !strings.Contains(err.Error(), "websocket connection closed") && !api.ErrorIsIn(err, []error{new(jsonrpc.RPCConnectionError)}) {
+					require.NoError(bm.t, err)
+				}
+
 				target = epoch
 				wait <- success
 			}
@@ -249,6 +261,18 @@ func (bm *BlockMiner) MineBlocks(ctx context.Context, blocktime time.Duration) {
 
 		for {
 			select {
+			case <-bm.pause:
+				select {
+				case <-bm.unpause:
+				case <-ctx.Done():
+					return
+				}
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			select {
 			case <-time.After(blocktime):
 			case <-ctx.Done():
 				return
@@ -274,6 +298,16 @@ func (bm *BlockMiner) MineBlocks(ctx context.Context, blocktime time.Duration) {
 // mining rounds.
 func (bm *BlockMiner) InjectNulls(rounds abi.ChainEpoch) {
 	atomic.AddInt64(&bm.nextNulls, int64(rounds))
+}
+
+// Pause compels the miner to wait for a signal to restart
+func (bm *BlockMiner) Pause() {
+	bm.pause <- struct{}{}
+}
+
+// Restart continues mining after a pause. This will hang if called before pause
+func (bm *BlockMiner) Restart() {
+	bm.unpause <- struct{}{}
 }
 
 func (bm *BlockMiner) MineUntilBlock(ctx context.Context, fn *TestFullNode, cb func(abi.ChainEpoch)) {
@@ -328,4 +362,12 @@ func (bm *BlockMiner) Stop() {
 	bm.t.Log("shutting down mining")
 	bm.cancel()
 	bm.wg.Wait()
+	if bm.unpause != nil {
+		close(bm.unpause)
+		bm.unpause = nil
+	}
+	if bm.pause != nil {
+		close(bm.pause)
+		bm.pause = nil
+	}
 }

@@ -5,17 +5,18 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/filecoin-project/go-state-types/manifest"
-
+	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
 	"golang.org/x/xerrors"
 
+	actorstypes "github.com/filecoin-project/go-state-types/actors"
+	"github.com/filecoin-project/go-state-types/manifest"
+
 	"github.com/filecoin-project/lotus/chain/actors/adt"
-	cid "github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
 )
 
-var manifestCids map[Version]cid.Cid = make(map[Version]cid.Cid)
-var manifests map[Version]map[string]cid.Cid = make(map[Version]map[string]cid.Cid)
+var manifestCids map[actorstypes.Version]cid.Cid = make(map[actorstypes.Version]cid.Cid)
+var manifests map[actorstypes.Version]map[string]cid.Cid = make(map[actorstypes.Version]map[string]cid.Cid)
 var actorMeta map[cid.Cid]actorEntry = make(map[cid.Cid]actorEntry)
 
 const (
@@ -30,10 +31,11 @@ const (
 	RewardKey   = "reward"
 	SystemKey   = "system"
 	VerifregKey = "verifiedregistry"
+	DatacapKey  = "datacap"
 )
 
-func GetBuiltinActorsKeys() []string {
-	return []string{
+func GetBuiltinActorsKeys(av actorstypes.Version) []string {
+	keys := []string{
 		AccountKey,
 		CronKey,
 		InitKey,
@@ -46,6 +48,10 @@ func GetBuiltinActorsKeys() []string {
 		SystemKey,
 		VerifregKey,
 	}
+	if av >= 9 {
+		keys = append(keys, DatacapKey)
+	}
+	return keys
 }
 
 var (
@@ -54,21 +60,21 @@ var (
 
 type actorEntry struct {
 	name    string
-	version Version
+	version actorstypes.Version
 }
 
-// ClearManifest clears all known manifests. This is usually used in tests that need to switch networks.
+// ClearManifests clears all known manifests. This is usually used in tests that need to switch networks.
 func ClearManifests() {
 	manifestMx.Lock()
 	defer manifestMx.Unlock()
 
-	manifestCids = make(map[Version]cid.Cid)
-	manifests = make(map[Version]map[string]cid.Cid)
+	manifestCids = make(map[actorstypes.Version]cid.Cid)
+	manifests = make(map[actorstypes.Version]map[string]cid.Cid)
 	actorMeta = make(map[cid.Cid]actorEntry)
 }
 
 // RegisterManifest registers an actors manifest with lotus.
-func RegisterManifest(av Version, manifestCid cid.Cid, entries map[string]cid.Cid) {
+func RegisterManifest(av actorstypes.Version, manifestCid cid.Cid, entries map[string]cid.Cid) {
 	manifestMx.Lock()
 	defer manifestMx.Unlock()
 
@@ -81,7 +87,7 @@ func RegisterManifest(av Version, manifestCid cid.Cid, entries map[string]cid.Ci
 }
 
 // GetManifest gets a loaded manifest.
-func GetManifest(av Version) (cid.Cid, bool) {
+func GetManifest(av actorstypes.Version) (cid.Cid, bool) {
 	manifestMx.RLock()
 	defer manifestMx.RUnlock()
 
@@ -102,27 +108,44 @@ func ReadManifest(ctx context.Context, store cbor.IpldStore, mfCid cid.Cid) (map
 		return nil, xerrors.Errorf("error loading manifest (cid: %s): %w", mfCid, err)
 	}
 
-	actorKeys := GetBuiltinActorsKeys() // TODO: we should be able to enumerate manifests directly.
-	metadata := make(map[string]cid.Cid, len(actorKeys))
-	for _, name := range actorKeys {
-		if c, ok := mf.Get(name); ok {
-			metadata[name] = c
-		}
+	var manifestData manifest.ManifestData
+	if err := store.Get(ctx, mf.Data, &manifestData); err != nil {
+		return nil, xerrors.Errorf("error loading manifest data: %w", err)
+	}
+
+	metadata := make(map[string]cid.Cid)
+	for _, entry := range manifestData.Entries {
+		metadata[entry.Name] = entry.Code
 	}
 
 	return metadata, nil
 }
 
-// GetActorCodeID looks up a builtin actor's code CID by actor version and canonical actor name.
-func GetActorCodeID(av Version, name string) (cid.Cid, bool) {
+// GetActorCodeIDsFromManifest looks up all builtin actor's code CIDs by actor version for versions that have a manifest.
+func GetActorCodeIDsFromManifest(av actorstypes.Version) (map[string]cid.Cid, bool) {
 	manifestMx.RLock()
 	defer manifestMx.RUnlock()
 
-	c, ok := manifests[av][name]
-	return c, ok
+	cids, ok := manifests[av]
+	return cids, ok
 }
 
-func GetActorMetaByCode(c cid.Cid) (string, Version, bool) {
+// Given a Manifest CID, get the manifest from the store and Load data into its entries
+func LoadManifest(ctx context.Context, mfCid cid.Cid, adtStore adt.Store) (*manifest.Manifest, error) {
+	var mf manifest.Manifest
+
+	if err := adtStore.Get(ctx, mfCid, &mf); err != nil {
+		return nil, xerrors.Errorf("error reading manifest: %w", err)
+	}
+
+	if err := mf.Load(ctx, adtStore); err != nil {
+		return nil, xerrors.Errorf("error loading manifest entries data: %w", err)
+	}
+
+	return &mf, nil
+}
+
+func GetActorMetaByCode(c cid.Cid) (string, actorstypes.Version, bool) {
 	manifestMx.RLock()
 	defer manifestMx.RUnlock()
 

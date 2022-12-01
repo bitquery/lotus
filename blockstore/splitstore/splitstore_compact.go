@@ -10,20 +10,20 @@ import (
 	"sync/atomic"
 	"time"
 
+	blocks "github.com/ipfs/go-block-format"
+	"github.com/ipfs/go-cid"
+	ipld "github.com/ipfs/go-ipld-format"
+	cbg "github.com/whyrusleeping/cbor-gen"
+	"go.opencensus.io/stats"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 
-	blocks "github.com/ipfs/go-block-format"
-	cid "github.com/ipfs/go-cid"
-	cbg "github.com/whyrusleeping/cbor-gen"
-
 	"github.com/filecoin-project/go-state-types/abi"
+
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/metrics"
-
-	"go.opencensus.io/stats"
 )
 
 var (
@@ -53,6 +53,12 @@ var (
 	// SyncWaitTime is the time delay from a tipset's min timestamp before we decide
 	// we have synced.
 	SyncWaitTime = 30 * time.Second
+
+	// This is a testing flag that should always be true when running a node. itests rely on the rough hack
+	// of starting genesis so far in the past that they exercise catchup mining to mine
+	// blocks quickly and so disabling syncgap checking is necessary to test compaction
+	// without a deep structural improvement of itests.
+	CheckSyncGap = true
 )
 
 var (
@@ -82,7 +88,7 @@ func (s *SplitStore) HeadChange(_, apply []*types.TipSet) error {
 	//       this is guaranteed by the chainstore, and it is pervasive in all lotus
 	//       -- if that ever changes then all hell will break loose in general and
 	//       we will have a rance to protectTipSets here.
-	//      Reagrdless, we put a mutex in HeadChange just to be safe
+	//      Regardless, we put a mutex in HeadChange just to be safe
 
 	if !atomic.CompareAndSwapInt32(&s.compacting, 0, 1) {
 		// we are currently compacting -- protect the new tipset(s)
@@ -97,7 +103,8 @@ func (s *SplitStore) HeadChange(_, apply []*types.TipSet) error {
 	}
 
 	timestamp := time.Unix(int64(curTs.MinTimestamp()), 0)
-	if time.Since(timestamp) > SyncGapTime {
+
+	if CheckSyncGap && time.Since(timestamp) > SyncGapTime {
 		// don't attempt compaction before we have caught up syncing
 		atomic.StoreInt32(&s.compacting, 0)
 		return nil
@@ -109,9 +116,12 @@ func (s *SplitStore) HeadChange(_, apply []*types.TipSet) error {
 		return nil
 	}
 
+	// Prioritize hot store compaction over cold store prune
+
 	if epoch-s.baseEpoch > CompactionThreshold {
 		// it's time to compact -- prepare the transaction and go!
 		s.beginTxnProtect()
+		s.compactType = hot
 		go func() {
 			defer atomic.StoreInt32(&s.compacting, 0)
 			defer s.endTxnProtect()
@@ -122,6 +132,40 @@ func (s *SplitStore) HeadChange(_, apply []*types.TipSet) error {
 			s.compact(curTs)
 
 			log.Infow("compaction done", "took", time.Since(start))
+		}()
+		// only prune if auto prune is enabled and after at least one compaction
+	} else if s.cfg.EnableColdStoreAutoPrune && epoch-s.pruneEpoch > PruneThreshold && s.compactionIndex > 0 {
+		s.beginTxnProtect()
+		s.compactType = cold
+		go func() {
+			defer atomic.StoreInt32(&s.compacting, 0)
+			defer s.endTxnProtect()
+
+			log.Info("pruning splitstore")
+			start := time.Now()
+
+			var retainP func(int64) bool
+			switch {
+			case s.cfg.ColdStoreRetention > int64(0):
+				retainP = func(depth int64) bool {
+					return depth <= int64(CompactionBoundary)+s.cfg.ColdStoreRetention*int64(build.Finality)
+				}
+			case s.cfg.ColdStoreRetention < 0:
+				retainP = func(_ int64) bool { return true }
+			default:
+				retainP = func(depth int64) bool {
+					return depth <= int64(CompactionBoundary)
+				}
+			}
+			movingGC := s.cfg.ColdStoreFullGCFrequency > 0 && s.pruneIndex%int64(s.cfg.ColdStoreFullGCFrequency) == 0
+			var gcOpts []bstore.BlockstoreGCOption
+			if movingGC {
+				gcOpts = append(gcOpts, bstore.WithFullGC(true))
+			}
+			doGC := func() error { return s.gcBlockstore(s.cold, gcOpts) }
+
+			s.prune(curTs, retainP, doGC)
+			log.Infow("prune done", "took", time.Since(start))
 		}()
 	} else {
 		// no compaction necessary
@@ -475,6 +519,7 @@ func (s *SplitStore) applyProtectors() error {
 // - At this point we are ready to begin purging:
 //   - We sort cold objects heaviest first, so as to never delete the consituents of a DAG before the DAG itself (which would leave dangling references)
 //   - We delete in small batches taking a lock; each batch is checked again for marks, from the concurrent transactional mark, so as to never delete anything live
+//
 // - We then end the transaction and compact/gc the hotstore.
 func (s *SplitStore) compact(curTs *types.TipSet) {
 	log.Info("waiting for active views to complete")
@@ -588,7 +633,6 @@ func (s *SplitStore) doCompact(curTs *types.TipSet) error {
 
 	// some stats for logging
 	var hotCnt, coldCnt int
-
 	err = s.hot.ForEachKey(func(c cid.Cid) error {
 		// was it marked?
 		mark, err := markSet.Has(c)
@@ -609,7 +653,6 @@ func (s *SplitStore) doCompact(curTs *types.TipSet) error {
 
 		return nil
 	})
-
 	if err != nil {
 		return xerrors.Errorf("error collecting cold objects: %w", err)
 	}
@@ -778,6 +821,10 @@ func (s *SplitStore) beginCriticalSection(markSet MarkSet) error {
 
 func (s *SplitStore) waitForSync() {
 	log.Info("waiting for sync")
+	if !CheckSyncGap {
+		log.Warnf("If you see this outside of test it is a serious splitstore issue")
+		return
+	}
 	startWait := time.Now()
 	defer func() {
 		log.Infow("waiting for sync done", "took", time.Since(startWait))
@@ -1065,13 +1112,10 @@ func (s *SplitStore) view(c cid.Cid, cb func([]byte) error) error {
 	}
 
 	err := s.hot.View(s.ctx, c, cb)
-	switch err {
-	case bstore.ErrNotFound:
+	if ipld.IsNotFound(err) {
 		return s.cold.View(s.ctx, c, cb)
-
-	default:
-		return err
 	}
+	return err
 }
 
 func (s *SplitStore) has(c cid.Cid) (bool, error) {
@@ -1090,10 +1134,10 @@ func (s *SplitStore) has(c cid.Cid) (bool, error) {
 
 func (s *SplitStore) get(c cid.Cid) (blocks.Block, error) {
 	blk, err := s.hot.Get(s.ctx, c)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		return blk, nil
-	case bstore.ErrNotFound:
+	case ipld.IsNotFound(err):
 		return s.cold.Get(s.ctx, c)
 	default:
 		return nil, err
@@ -1102,10 +1146,10 @@ func (s *SplitStore) get(c cid.Cid) (blocks.Block, error) {
 
 func (s *SplitStore) getSize(c cid.Cid) (int, error) {
 	sz, err := s.hot.GetSize(s.ctx, c)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		return sz, nil
-	case bstore.ErrNotFound:
+	case ipld.IsNotFound(err):
 		return s.cold.GetSize(s.ctx, c)
 	default:
 		return 0, err
@@ -1119,10 +1163,9 @@ func (s *SplitStore) moveColdBlocks(coldr *ColdSetReader) error {
 		if err := s.checkClosing(); err != nil {
 			return err
 		}
-
 		blk, err := s.hot.Get(s.ctx, c)
 		if err != nil {
-			if err == bstore.ErrNotFound {
+			if ipld.IsNotFound(err) {
 				log.Warnf("hotstore missing block %s", c)
 				return nil
 			}
@@ -1137,6 +1180,7 @@ func (s *SplitStore) moveColdBlocks(coldr *ColdSetReader) error {
 				return xerrors.Errorf("error putting batch to coldstore: %w", err)
 			}
 			batch = batch[:0]
+
 		}
 
 		return nil
@@ -1225,8 +1269,17 @@ func (s *SplitStore) purgeBatch(batch, deadCids []cid.Cid, checkpoint *Checkpoin
 		return 0, liveCnt, nil
 	}
 
-	if err := s.hot.DeleteMany(s.ctx, deadCids); err != nil {
-		return 0, liveCnt, xerrors.Errorf("error purging cold objects: %w", err)
+	switch s.compactType {
+	case hot:
+		if err := s.hot.DeleteMany(s.ctx, deadCids); err != nil {
+			return 0, liveCnt, xerrors.Errorf("error purging cold objects: %w", err)
+		}
+	case cold:
+		if err := s.cold.DeleteMany(s.ctx, deadCids); err != nil {
+			return 0, liveCnt, xerrors.Errorf("error purging dead objects: %w", err)
+		}
+	default:
+		return 0, liveCnt, xerrors.Errorf("invalid compaction type %d, only hot and cold allowed for critical section", s.compactType)
 	}
 
 	s.debug.LogDelete(deadCids)
@@ -1243,12 +1296,25 @@ func (s *SplitStore) coldSetPath() string {
 	return filepath.Join(s.path, "coldset")
 }
 
+func (s *SplitStore) deadSetPath() string {
+	return filepath.Join(s.path, "deadset")
+}
+
 func (s *SplitStore) checkpointPath() string {
 	return filepath.Join(s.path, "checkpoint")
 }
 
+func (s *SplitStore) pruneCheckpointPath() string {
+	return filepath.Join(s.path, "prune-checkpoint")
+}
+
 func (s *SplitStore) checkpointExists() bool {
 	_, err := os.Stat(s.checkpointPath())
+	return err == nil
+}
+
+func (s *SplitStore) pruneCheckpointExists() bool {
+	_, err := os.Stat(s.pruneCheckpointPath())
 	return err == nil
 }
 
@@ -1272,6 +1338,7 @@ func (s *SplitStore) completeCompaction() error {
 	defer markSet.Close() //nolint:errcheck
 
 	// PURGE
+	s.compactType = hot
 	log.Info("purging cold objects from the hotstore")
 	startPurge := time.Now()
 	err = s.completePurge(coldr, checkpoint, last, markSet)
@@ -1294,6 +1361,7 @@ func (s *SplitStore) completeCompaction() error {
 	if err := os.Remove(s.coldSetPath()); err != nil {
 		log.Warnf("error removing coldset: %s", err)
 	}
+	s.compactType = none
 
 	// Note: at this point we can start the splitstore; a compaction should run on
 	//       the first head change, which will trigger gc on the hotstore.

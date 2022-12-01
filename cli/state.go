@@ -18,18 +18,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/network"
-
-	"github.com/filecoin-project/lotus/chain/actors"
-
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/lotus/chain/consensus/filcns"
-
-	"github.com/filecoin-project/lotus/api/v0api"
-
 	"github.com/fatih/color"
-	"github.com/filecoin-project/lotus/chain/actors/builtin"
-
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/multiformats/go-multiaddr"
@@ -40,12 +29,19 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	actorstypes "github.com/filecoin-project/go-state-types/actors"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
+	"github.com/filecoin-project/go-state-types/network"
 
 	"github.com/filecoin-project/lotus/api"
 	lapi "github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/actors"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -172,6 +168,22 @@ var StateMinerInfo = &cli.Command{
 		fmt.Printf("Worker:\t%s\n", mi.Worker)
 		for i, controlAddress := range mi.ControlAddresses {
 			fmt.Printf("Control %d: \t%s\n", i, controlAddress)
+		}
+		if mi.Beneficiary != address.Undef {
+			fmt.Printf("Beneficiary:\t%s\n", mi.Beneficiary)
+			if mi.Beneficiary != mi.Owner {
+				fmt.Printf("Beneficiary Quota:\t%s\n", mi.BeneficiaryTerm.Quota)
+				fmt.Printf("Beneficiary Used Quota:\t%s\n", mi.BeneficiaryTerm.UsedQuota)
+				fmt.Printf("Beneficiary Expiration:\t%s\n", mi.BeneficiaryTerm.Expiration)
+			}
+		}
+		if mi.PendingBeneficiaryTerm != nil {
+			fmt.Printf("Pending Beneficiary Term:\n")
+			fmt.Printf("New Beneficiary:\t%s\n", mi.PendingBeneficiaryTerm.NewBeneficiary)
+			fmt.Printf("New Quota:\t%s\n", mi.PendingBeneficiaryTerm.NewQuota)
+			fmt.Printf("New Expiration:\t%s\n", mi.PendingBeneficiaryTerm.NewExpiration)
+			fmt.Printf("Approved By Beneficiary:\t%t\n", mi.PendingBeneficiaryTerm.ApprovedByBeneficiary)
+			fmt.Printf("Approved By Nominee:\t%t\n", mi.PendingBeneficiaryTerm.ApprovedByNominee)
 		}
 
 		fmt.Printf("PeerID:\t%s\n", mi.PeerId)
@@ -508,9 +520,8 @@ var StateReplayCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		if cctx.Args().Len() != 1 {
-			fmt.Println("must provide cid of message to replay")
-			return nil
+		if cctx.NArg() != 1 {
+			return IncorrectNumArgs(cctx)
 		}
 
 		mcid, err := cid.Decode(cctx.Args().First())
@@ -1584,8 +1595,8 @@ var StateCallCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		if cctx.Args().Len() < 2 {
-			return fmt.Errorf("must specify at least actor and method to invoke")
+		if cctx.NArg() < 2 {
+			return ShowHelp(cctx, fmt.Errorf("must specify at least actor and method to invoke"))
 		}
 
 		api, closer, err := GetFullNodeAPI(cctx)
@@ -1623,7 +1634,7 @@ var StateCallCmd = &cli.Command{
 
 		var params []byte
 		// If params were passed in, decode them
-		if cctx.Args().Len() > 2 {
+		if cctx.NArg() > 2 {
 			switch cctx.String("encoding") {
 			case "base64":
 				params, err = base64.StdEncoding.DecodeString(cctx.Args().Get(2))
@@ -1747,8 +1758,8 @@ var StateSectorCmd = &cli.Command{
 
 		ctx := ReqContext(cctx)
 
-		if cctx.Args().Len() != 2 {
-			return xerrors.Errorf("expected 2 params: minerAddress and sectorNumber")
+		if cctx.NArg() != 2 {
+			return IncorrectNumArgs(cctx)
 		}
 
 		ts, err := LoadTipSet(ctx, cctx, api)
@@ -1782,8 +1793,8 @@ var StateSectorCmd = &cli.Command{
 		}
 		fmt.Println("DealIDs: ", si.DealIDs)
 		fmt.Println()
-		fmt.Println("Activation: ", EpochTime(ts.Height(), si.Activation))
-		fmt.Println("Expiration: ", EpochTime(ts.Height(), si.Expiration))
+		fmt.Println("Activation: ", EpochTimeTs(ts.Height(), si.Activation, ts))
+		fmt.Println("Expiration: ", EpochTimeTs(ts.Height(), si.Expiration, ts))
 		fmt.Println()
 		fmt.Println("DealWeight: ", si.DealWeight)
 		fmt.Println("VerifiedDealWeight: ", si.VerifiedDealWeight)
@@ -1889,7 +1900,6 @@ var StateSysActorCIDsCmd = &cli.Command{
 		&cli.UintFlag{
 			Name:  "network-version",
 			Usage: "specify network version",
-			Value: uint(build.NewestNetworkVersion),
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -1905,27 +1915,28 @@ var StateSysActorCIDsCmd = &cli.Command{
 
 		ctx := ReqContext(cctx)
 
-		ts, err := LoadTipSet(ctx, cctx, api)
-		if err != nil {
-			return err
-		}
-
-		nv, err := api.StateNetworkVersion(ctx, ts.Key())
-		if err != nil {
-			return err
-		}
-
+		var nv network.Version
 		if cctx.IsSet("network-version") {
 			nv = network.Version(cctx.Uint64("network-version"))
+		} else {
+			nv, err = api.StateNetworkVersion(ctx, types.EmptyTSK)
+			if err != nil {
+				return err
+			}
 		}
 
 		fmt.Printf("Network Version: %d\n", nv)
 
-		actorVersion, err := actors.VersionForNetwork(nv)
+		actorVersion, err := actorstypes.VersionForNetwork(nv)
 		if err != nil {
 			return err
 		}
 		fmt.Printf("Actor Version: %d\n", actorVersion)
+
+		manifestCid, ok := actors.GetManifest(actorVersion)
+		if ok {
+			fmt.Printf("Manifest CID: %v\n", manifestCid)
+		}
 
 		tw := tabwriter.NewWriter(os.Stdout, 2, 4, 2, ' ', 0)
 		_, _ = fmt.Fprintln(tw, "\nActor\tCID\t")

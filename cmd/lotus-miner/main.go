@@ -9,13 +9,12 @@ import (
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
-	cliutil "github.com/filecoin-project/lotus/cli/util"
-
 	"github.com/filecoin-project/go-address"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	lcli "github.com/filecoin-project/lotus/cli"
+	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/filecoin-project/lotus/lib/lotuslog"
 	"github.com/filecoin-project/lotus/lib/tracing"
 	"github.com/filecoin-project/lotus/node/repo"
@@ -178,13 +177,13 @@ func getActorAddress(ctx context.Context, cctx *cli.Context) (maddr address.Addr
 		return
 	}
 
-	nodeAPI, closer, err := lcli.GetStorageMinerAPI(cctx)
+	minerApi, closer, err := lcli.GetStorageMinerAPI(cctx)
 	if err != nil {
 		return address.Undef, err
 	}
 	defer closer()
 
-	maddr, err = nodeAPI.ActorAddress(ctx)
+	maddr, err = minerApi.ActorAddress(ctx)
 	if err != nil {
 		return maddr, xerrors.Errorf("getting actor address: %w", err)
 	}

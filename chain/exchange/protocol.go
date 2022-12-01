@@ -3,34 +3,30 @@ package exchange
 import (
 	"time"
 
-	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/store"
-
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
 var log = logging.Logger("chainxchg")
 
 const (
-	// BlockSyncProtocolID is the protocol ID of the former blocksync protocol.
-	// Deprecated.
-	BlockSyncProtocolID = "/fil/sync/blk/0.0.1"
-
 	// ChainExchangeProtocolID is the protocol ID of the chain exchange
 	// protocol.
 	ChainExchangeProtocolID = "/fil/chain/xchg/0.0.1"
 )
 
 // FIXME: Bumped from original 800 to this to accommodate `syncFork()`
-//  use of `GetBlocks()`. It seems the expectation of that API is to
-//  fetch any amount of blocks leaving it to the internal logic here
-//  to partition and reassemble the requests if they go above the maximum.
-//  (Also as a consequence of this temporarily removing the `const`
-//   qualifier to avoid "const initializer [...] is not a constant" error.)
+//
+//	use of `GetBlocks()`. It seems the expectation of that API is to
+//	fetch any amount of blocks leaving it to the internal logic here
+//	to partition and reassemble the requests if they go above the maximum.
+//	(Also as a consequence of this temporarily removing the `const`
+//	 qualifier to avoid "const initializer [...] is not a constant" error.)
 var MaxRequestLength = uint64(build.ForkLengthThreshold)
 
 const (
@@ -152,11 +148,12 @@ type BSTipSet struct {
 // `BlsIncludes`/`SecpkIncludes` matches `Bls`/`Secpk` messages
 // to blocks in the tipsets with the format:
 // `BlsIncludes[BI][MI]`
-//  * BI: block index in the tipset.
-//  * MI: message index in `Bls` list
+//   - BI: block index in the tipset.
+//   - MI: message index in `Bls` list
 //
 // FIXME: The logic to decompress this structure should belong
-//  to itself, not to the consumer.
+//
+//	to itself, not to the consumer.
 type CompactedMessages struct {
 	Bls         []*types.Message
 	BlsIncludes [][]uint64

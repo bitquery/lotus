@@ -1,4 +1,4 @@
-//stm: #unit
+// stm: #unit
 package store_test
 
 import (
@@ -7,7 +7,7 @@ import (
 	"io"
 	"testing"
 
-	datastore "github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore"
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/crypto"

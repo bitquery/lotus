@@ -8,11 +8,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/urfave/cli/v2"
 
 	"github.com/filecoin-project/go-address"
-
-	"github.com/urfave/cli/v2"
+	"github.com/filecoin-project/go-state-types/abi"
 )
 
 var base64Cmd = &cli.Command{
@@ -33,7 +32,7 @@ var base64Cmd = &cli.Command{
 	Action: func(cctx *cli.Context) error {
 		var input io.Reader
 
-		if cctx.Args().Len() == 0 {
+		if cctx.NArg() == 0 {
 			input = os.Stdin
 		} else {
 			input = strings.NewReader(cctx.Args().First())

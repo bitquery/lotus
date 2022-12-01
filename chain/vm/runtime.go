@@ -9,8 +9,14 @@ import (
 	gruntime "runtime"
 	"time"
 
+	"github.com/ipfs/go-cid"
+	ipldcbor "github.com/ipfs/go-ipld-cbor"
+	"go.opencensus.io/trace"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	actorstypes "github.com/filecoin-project/go-state-types/actors"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/exitcode"
@@ -23,10 +29,6 @@ import (
 	rt5 "github.com/filecoin-project/specs-actors/v5/actors/runtime"
 	rt6 "github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	rt7 "github.com/filecoin-project/specs-actors/v7/actors/runtime"
-	"github.com/ipfs/go-cid"
-	ipldcbor "github.com/ipfs/go-ipld-cbor"
-	"go.opencensus.io/trace"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
@@ -58,7 +60,9 @@ func (m *Message) ValueReceived() abi.TokenAmount {
 	return m.msg.Value
 }
 
-// EnableDetailedTracing, if true, outputs gas tracing in execution traces.
+// EnableDetailedTracing has different behaviour in the LegacyVM and FVM.
+// In the LegacyVM, it enables detailed gas tracing, slowing down execution.
+// In the FVM, it enables execution traces, which are primarily used to observe subcalls.
 var EnableDetailedTracing = os.Getenv("LOTUS_VM_ENABLE_TRACING") == "1"
 
 type Runtime struct {
@@ -170,7 +174,7 @@ func (rt *Runtime) shimCall(f func() interface{}) (rval []byte, aerr aerrors.Act
 			if rt.NetworkVersion() <= network.Version3 {
 				aerr = aerrors.Newf(1, "spec actors failure: %s", r)
 			} else {
-				aerr = aerrors.Newf(exitcode.SysErrReserved1, "spec actors failure: %s", r)
+				aerr = aerrors.Newf(exitcode.SysErrIllegalInstruction, "spec actors failure: %s", r)
 			}
 		}
 	}()
@@ -370,7 +374,7 @@ func (rt *Runtime) ValidateImmediateCallerType(ts ...cid.Cid) {
 
 		// this really only for genesis in tests; nv16 will be running on FVM anyway.
 		if nv := rt.NetworkVersion(); nv >= network.Version16 {
-			av, err := actors.VersionForNetwork(nv)
+			av, err := actorstypes.VersionForNetwork(nv)
 			if err != nil {
 				panic(aerrors.Fatalf("failed to get actors version for network version %d", nv))
 			}

@@ -1,4 +1,4 @@
-//stm: #unit
+// stm: #unit
 package events
 
 import (
@@ -7,11 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"gotest.tools/assert"
-
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
+	"gotest.tools/assert"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"

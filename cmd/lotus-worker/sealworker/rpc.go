@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/mitchellh/go-homedir"
 	"golang.org/x/xerrors"
 
@@ -16,17 +17,19 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	"github.com/filecoin-project/lotus/build"
-	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
-	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
-	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 	"github.com/filecoin-project/lotus/lib/rpcenc"
 	"github.com/filecoin-project/lotus/metrics/proxy"
+	"github.com/filecoin-project/lotus/storage/paths"
+	"github.com/filecoin-project/lotus/storage/sealer"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
+
+var log = logging.Logger("sealworker")
 
 func WorkerHandler(authv func(ctx context.Context, token string) ([]auth.Permission, error), remote http.HandlerFunc, a api.Worker, permissioned bool) http.Handler {
 	mux := mux.NewRouter()
 	readerHandler, readerServerOpt := rpcenc.ReaderParamDecoder()
-	rpcServer := jsonrpc.NewServer(readerServerOpt)
+	rpcServer := jsonrpc.NewServer(jsonrpc.WithServerErrors(api.RPCErrors), readerServerOpt)
 
 	wapi := proxy.MetricedWorkerAPI(a)
 	if permissioned {
@@ -34,6 +37,7 @@ func WorkerHandler(authv func(ctx context.Context, token string) ([]auth.Permiss
 	}
 
 	rpcServer.Register("Filecoin", wapi)
+	rpcServer.AliasMethod("rpc.discover", "Filecoin.Discover")
 
 	mux.Handle("/rpc/v0", rpcServer)
 	mux.Handle("/rpc/streams/v0/push/{uuid}", readerHandler)
@@ -52,16 +56,30 @@ func WorkerHandler(authv func(ctx context.Context, token string) ([]auth.Permiss
 }
 
 type Worker struct {
-	*sectorstorage.LocalWorker
+	*sealer.LocalWorker
 
-	LocalStore *stores.Local
-	Storage    stores.LocalStorage
+	LocalStore *paths.Local
+	Storage    paths.LocalStorage
 
 	disabled int64
 }
 
 func (w *Worker) Version(context.Context) (api.Version, error) {
 	return api.WorkerAPIVersion0, nil
+}
+
+func (w *Worker) StorageLocal(ctx context.Context) (map[storiface.ID]string, error) {
+	l, err := w.LocalStore.Local(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := map[storiface.ID]string{}
+	for _, st := range l {
+		out[st.ID] = st.LocalPath
+	}
+
+	return out, nil
 }
 
 func (w *Worker) StorageAddLocal(ctx context.Context, path string) error {
@@ -74,13 +92,82 @@ func (w *Worker) StorageAddLocal(ctx context.Context, path string) error {
 		return xerrors.Errorf("opening local path: %w", err)
 	}
 
-	if err := w.Storage.SetStorage(func(sc *stores.StorageConfig) {
-		sc.StoragePaths = append(sc.StoragePaths, stores.LocalPath{Path: path})
+	if err := w.Storage.SetStorage(func(sc *paths.StorageConfig) {
+		sc.StoragePaths = append(sc.StoragePaths, paths.LocalPath{Path: path})
 	}); err != nil {
 		return xerrors.Errorf("get storage config: %w", err)
 	}
 
 	return nil
+}
+
+func (w *Worker) StorageDetachLocal(ctx context.Context, path string) error {
+	path, err := homedir.Expand(path)
+	if err != nil {
+		return xerrors.Errorf("expanding local path: %w", err)
+	}
+
+	// check that we have the path opened
+	lps, err := w.LocalStore.Local(ctx)
+	if err != nil {
+		return xerrors.Errorf("getting local path list: %w", err)
+	}
+
+	var localPath *storiface.StoragePath
+	for _, lp := range lps {
+		if lp.LocalPath == path {
+			lp := lp // copy to make the linter happy
+			localPath = &lp
+			break
+		}
+	}
+	if localPath == nil {
+		return xerrors.Errorf("no local paths match '%s'", path)
+	}
+
+	// drop from the persisted storage.json
+	var found bool
+	if err := w.Storage.SetStorage(func(sc *paths.StorageConfig) {
+		out := make([]paths.LocalPath, 0, len(sc.StoragePaths))
+		for _, storagePath := range sc.StoragePaths {
+			if storagePath.Path != path {
+				out = append(out, storagePath)
+				continue
+			}
+			found = true
+		}
+		sc.StoragePaths = out
+	}); err != nil {
+		return xerrors.Errorf("set storage config: %w", err)
+	}
+	if !found {
+		// maybe this is fine?
+		return xerrors.Errorf("path not found in storage.json")
+	}
+
+	// unregister locally, drop from sector index
+	return w.LocalStore.ClosePath(ctx, localPath.ID)
+}
+
+func (w *Worker) StorageDetachAll(ctx context.Context) error {
+
+	lps, err := w.LocalStore.Local(ctx)
+	if err != nil {
+		return xerrors.Errorf("getting local path list: %w", err)
+	}
+
+	for _, lp := range lps {
+		err = w.LocalStore.ClosePath(ctx, lp.ID)
+		if err != nil {
+			log.Warnf("unable to close path: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (w *Worker) StorageRedeclareLocal(ctx context.Context, id *storiface.ID, dropMissing bool) error {
+	return w.LocalStore.Redeclare(ctx, id, dropMissing)
 }
 
 func (w *Worker) SetEnabled(ctx context.Context, enabled bool) error {
@@ -117,4 +204,9 @@ func (w *Worker) Discover(ctx context.Context) (apitypes.OpenRPCDocument, error)
 	return build.OpenRPCDiscoverJSON_Worker(), nil
 }
 
+func (w *Worker) Shutdown(ctx context.Context) error {
+	return w.LocalWorker.Close()
+}
+
 var _ storiface.WorkerCalls = &Worker{}
+var _ api.Worker = &Worker{}

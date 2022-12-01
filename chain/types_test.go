@@ -1,4 +1,4 @@
-//stm: #unit
+// stm: #unit
 package chain
 
 import (
@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/filecoin-project/lotus/build"
-
 	"github.com/filecoin-project/go-address"
+
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 

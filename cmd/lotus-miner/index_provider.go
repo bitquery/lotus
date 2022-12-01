@@ -3,9 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/ipfs/go-cid"
-
 	"github.com/fatih/color"
+	"github.com/ipfs/go-cid"
 	"github.com/urfave/cli/v2"
 
 	lcli "github.com/filecoin-project/lotus/cli"
@@ -37,7 +36,7 @@ var indexProvAnnounceCmd = &cli.Command{
 		}
 
 		if cctx.NArg() != 1 {
-			return fmt.Errorf("must provide the deal proposal CID")
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		proposalCidStr := cctx.Args().First()

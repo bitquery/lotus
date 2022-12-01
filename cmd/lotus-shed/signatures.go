@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"strconv"
 
-	ffi "github.com/filecoin-project/filecoin-ffi"
-	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/ipfs/go-cid"
-
-	"github.com/filecoin-project/go-state-types/crypto"
-	"github.com/filecoin-project/lotus/lib/sigs"
-
-	"github.com/filecoin-project/go-address"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
+
+	ffi "github.com/filecoin-project/filecoin-ffi"
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/crypto"
+
+	lcli "github.com/filecoin-project/lotus/cli"
+	"github.com/filecoin-project/lotus/lib/sigs"
 )
 
 var signaturesCmd = &cli.Command{
@@ -31,8 +31,8 @@ var sigsVerifyBlsMsgsCmd = &cli.Command{
 	Description: "given a block, verifies the bls signature of the messages in the block",
 	Usage:       "<blockCid>",
 	Action: func(cctx *cli.Context) error {
-		if cctx.Args().Len() != 1 {
-			return xerrors.Errorf("usage: <blockCid>")
+		if cctx.NArg() != 1 {
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		api, closer, err := lcli.GetFullNodeAPI(cctx)
@@ -101,8 +101,8 @@ var sigsVerifyVoteCmd = &cli.Command{
 	Usage:       "<FIPnumber> <signingAddress> <signature>",
 	Action: func(cctx *cli.Context) error {
 
-		if cctx.Args().Len() != 3 {
-			return xerrors.Errorf("usage: verify-vote <FIPnumber> <signingAddress> <signature>")
+		if cctx.NArg() != 3 {
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		fip, err := strconv.ParseInt(cctx.Args().First(), 10, 64)

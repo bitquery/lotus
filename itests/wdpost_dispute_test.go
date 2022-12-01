@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -6,21 +6,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
-	prooftypes "github.com/filecoin-project/go-state-types/proof"
-
 	"github.com/filecoin-project/go-state-types/builtin"
 	minertypes "github.com/filecoin-project/go-state-types/builtin/v8/miner"
-
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/dline"
+	prooftypes "github.com/filecoin-project/go-state-types/proof"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/itests/kit"
-	"github.com/stretchr/testify/require"
 )
 
 func TestWindowPostDispute(t *testing.T) {
@@ -94,7 +94,7 @@ func TestWindowPostDispute(t *testing.T) {
 	require.Equal(t, p.MinerPower.RawBytePower, types.NewInt(uint64(ssz)))
 
 	//stm: @MINER_SECTOR_LIST_001
-	evilSectors, err := evilMiner.SectorsList(ctx)
+	evilSectors, err := evilMiner.SectorsListNonGenesis(ctx)
 	require.NoError(t, err)
 	evilSectorNo := evilSectors[0] // only one.
 	//stm: @CHAIN_STATE_SECTOR_PARTITION_001

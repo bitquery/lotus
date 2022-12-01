@@ -6,17 +6,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/builtin/v8/paych"
-
 	"github.com/ipfs/go-cid"
-
-	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/build"
+	"github.com/testground/sdk-go/sync"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/testground/sdk-go/sync"
+	"github.com/filecoin-project/go-state-types/builtin/v8/paych"
 
+	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/testplans/lotus-soup/testkit"
 )
 
@@ -46,7 +44,8 @@ func getClientMode(groupSeq int64) ClientMode {
 }
 
 // TODO Stress is currently WIP. We found blockers in Lotus that prevent us from
-//  making progress. See https://github.com/filecoin-project/lotus/issues/2297.
+//
+//	making progress. See https://github.com/filecoin-project/lotus/issues/2297.
 func Stress(t *testkit.TestEnvironment) error {
 	// Dispatch/forward non-client roles to defaults.
 	if t.Role != "client" {
@@ -212,7 +211,7 @@ func runSender(ctx context.Context, t *testkit.TestEnvironment, clients []*testk
 		return fmt.Errorf("failed to settle payment channel: %w", err)
 	}
 
-	t.SyncClient.Publish(ctx, SettleTopic, settleMsgCid)
+	_, err = t.SyncClient.Publish(ctx, SettleTopic, settleMsgCid)
 	if err != nil {
 		return fmt.Errorf("failed to publish settle message cid: %w", err)
 	}

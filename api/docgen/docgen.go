@@ -6,32 +6,33 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net/http"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
 	"unicode"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-bitfield"
 	"github.com/google/uuid"
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
-	"github.com/libp2p/go-libp2p-core/metrics"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	textselector "github.com/ipld/go-ipld-selector-text-lite"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/metrics"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-bitfield"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	filestore "github.com/filecoin-project/go-fil-markets/filestore"
+	"github.com/filecoin-project/go-fil-markets/filestore"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-jsonrpc/auth"
-	blocks "github.com/ipfs/go-block-format"
-	textselector "github.com/ipld/go-ipld-selector-text-lite"
-
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/builtin/v9/verifreg"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/exitcode"
 
@@ -40,11 +41,11 @@ import (
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
-	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
-	sealing "github.com/filecoin-project/lotus/extern/storage-sealing"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/repo/imports"
+	sealing "github.com/filecoin-project/lotus/storage/pipeline"
+	"github.com/filecoin-project/lotus/storage/sealer/sealtasks"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 var ExampleValues = map[reflect.Type]interface{}{
@@ -137,7 +138,15 @@ func init() {
 	addExample(&textSelExample)
 	addExample(&apiSelExample)
 	addExample(network.ReachabilityPublic)
-	addExample(build.NewestNetworkVersion)
+	addExample(build.TestNetworkVersion)
+	allocationId := verifreg.AllocationId(0)
+	addExample(allocationId)
+	addExample(&allocationId)
+	addExample(map[verifreg.AllocationId]verifreg.Allocation{})
+	claimId := verifreg.ClaimId(0)
+	addExample(claimId)
+	addExample(&claimId)
+	addExample(map[verifreg.ClaimId]verifreg.Claim{})
 	addExample(map[string]int{"name": 42})
 	addExample(map[string]time.Time{"name": time.Unix(1615243938, 0).UTC()})
 	addExample(&types.ExecutionTrace{
@@ -273,6 +282,8 @@ func init() {
 			Read:   [storiface.FileTypes]uint{2, 3, 0},
 		},
 	})
+	storifaceid := storiface.ID("1399aa04-2625-44b1-bad4-bd07b59b22c4")
+	addExample(&storifaceid)
 
 	// worker specific
 	addExample(storiface.AcquireMove)
@@ -335,7 +346,21 @@ func init() {
 		Conns:           4,
 		FD:              5,
 	})
+	addExample(map[string]bitfield.BitField{
+		"": bitfield.NewFromSet([]uint64{5, 6, 7, 10}),
+	})
 
+	addExample(http.Header{
+		"Authorization": []string{"Bearer ey.."},
+	})
+
+	addExample(map[storiface.SectorFileType]storiface.SectorLocation{
+		storiface.FTSealed: {
+			Local:   false,
+			URL:     "https://example.com/sealingservice/sectors/s-f0123-12345",
+			Headers: nil,
+		},
+	})
 }
 
 func GetAPIType(name, pkg string) (i interface{}, t reflect.Type, permStruct []reflect.Type) {
@@ -359,6 +384,10 @@ func GetAPIType(name, pkg string) (i interface{}, t reflect.Type, permStruct []r
 			i = &api.WorkerStruct{}
 			t = reflect.TypeOf(new(struct{ api.Worker })).Elem()
 			permStruct = append(permStruct, reflect.TypeOf(api.WorkerStruct{}.Internal))
+		case "Gateway":
+			i = &api.GatewayStruct{}
+			t = reflect.TypeOf(new(struct{ api.Gateway })).Elem()
+			permStruct = append(permStruct, reflect.TypeOf(api.GatewayStruct{}.Internal))
 		default:
 			panic("unknown type")
 		}

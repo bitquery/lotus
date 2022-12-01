@@ -7,12 +7,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/filecoin-project/go-address"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
-	"github.com/stretchr/testify/require"
 )
 
 func RunMultisigTests(t *testing.T, client *kit.TestFullNode) {
@@ -77,8 +79,6 @@ func RunMultisigTests(t *testing.T, client *kit.TestFullNode) {
 	require.Regexp(t, regexp.MustCompile("Balance: 0.000000000000001 FIL"), out)
 	// Expect 1 transaction
 	require.Regexp(t, regexp.MustCompile(`Transactions:\s*1`), out)
-	// Expect transaction to be "AddSigner"
-	require.Regexp(t, regexp.MustCompile(`AddSigner`), out)
 
 	// Approve adding the new address
 	// msig add-approve --from=<addr> <msig> <addr> 0 <addr> false

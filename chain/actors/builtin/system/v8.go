@@ -3,9 +3,9 @@ package system
 import (
 	"github.com/ipfs/go-cid"
 
-	"github.com/filecoin-project/lotus/chain/actors/adt"
-
 	system8 "github.com/filecoin-project/go-state-types/builtin/v8/system"
+
+	"github.com/filecoin-project/lotus/chain/actors/adt"
 )
 
 var _ State = (*state8)(nil)
@@ -39,5 +39,12 @@ func (s *state8) GetState() interface{} {
 func (s *state8) GetBuiltinActors() cid.Cid {
 
 	return s.State.BuiltinActors
+
+}
+
+func (s *state8) SetBuiltinActors(c cid.Cid) error {
+
+	s.State.BuiltinActors = c
+	return nil
 
 }

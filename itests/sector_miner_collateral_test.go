@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -13,14 +13,14 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
-	sealing "github.com/filecoin-project/lotus/extern/storage-sealing"
-	"github.com/filecoin-project/lotus/extern/storage-sealing/sealiface"
 	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/filecoin-project/lotus/node"
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/repo"
+	sealing "github.com/filecoin-project/lotus/storage/pipeline"
+	"github.com/filecoin-project/lotus/storage/pipeline/sealiface"
 )
 
 func TestMinerBalanceCollateral(t *testing.T) {
@@ -96,7 +96,7 @@ func TestMinerBalanceCollateral(t *testing.T) {
 		}
 
 		// check that sector messages had zero value set
-		sl, err := miner.SectorsList(ctx)
+		sl, err := miner.SectorsListNonGenesis(ctx)
 		require.NoError(t, err)
 
 		for _, number := range sl {

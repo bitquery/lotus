@@ -3,17 +3,18 @@ package market
 import (
 	"bytes"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/lotus/chain/actors/adt"
-	"github.com/filecoin-project/lotus/chain/types"
-
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	verifregtypes "github.com/filecoin-project/go-state-types/builtin/v9/verifreg"
 	market3 "github.com/filecoin-project/specs-actors/v3/actors/builtin/market"
 	adt3 "github.com/filecoin-project/specs-actors/v3/actors/util/adt"
+
+	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 var _ State = (*state3)(nil)
@@ -178,7 +179,14 @@ func (s *dealStates3) array() adt.Array {
 }
 
 func fromV3DealState(v3 market3.DealState) DealState {
-	return (DealState)(v3)
+
+	return DealState{
+		SectorStartEpoch: v3.SectorStartEpoch,
+		LastUpdatedEpoch: v3.LastUpdatedEpoch,
+		SlashEpoch:       v3.SlashEpoch,
+		VerifiedClaim:    0,
+	}
+
 }
 
 type dealProposals3 struct {
@@ -236,6 +244,7 @@ func (s *dealProposals3) array() adt.Array {
 func fromV3DealProposal(v3 market3.DealProposal) (DealProposal, error) {
 
 	label, err := labelFromGoString(v3.Label)
+
 	if err != nil {
 		return DealProposal{}, xerrors.Errorf("error setting deal label: %w", err)
 	}
@@ -286,4 +295,10 @@ func (r *publishStorageDealsReturn3) IsDealValid(index uint64) (bool, int, error
 
 func (r *publishStorageDealsReturn3) DealIDs() ([]abi.DealID, error) {
 	return r.IDs, nil
+}
+
+func (s *state3) GetAllocationIdForPendingDeal(dealId abi.DealID) (verifregtypes.AllocationId, error) {
+
+	return verifregtypes.NoAllocationID, xerrors.Errorf("unsupported before actors v9")
+
 }
