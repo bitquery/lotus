@@ -159,6 +159,7 @@
 * [State](#State)
   * [StateAccountKey](#StateAccountKey)
   * [StateActorCodeCIDs](#StateActorCodeCIDs)
+  * [StateActorManifestCID](#StateActorManifestCID)
   * [StateAllMinerFaults](#StateAllMinerFaults)
   * [StateCall](#StateCall)
   * [StateChangedActors](#StateChangedActors)
@@ -167,6 +168,11 @@
   * [StateDealProviderCollateralBounds](#StateDealProviderCollateralBounds)
   * [StateDecodeParams](#StateDecodeParams)
   * [StateGetActor](#StateGetActor)
+  * [StateGetAllocation](#StateGetAllocation)
+  * [StateGetAllocationForPendingDeal](#StateGetAllocationForPendingDeal)
+  * [StateGetAllocations](#StateGetAllocations)
+  * [StateGetClaim](#StateGetClaim)
+  * [StateGetClaims](#StateGetClaims)
   * [StateGetNetworkParams](#StateGetNetworkParams)
   * [StateGetRandomnessFromBeacon](#StateGetRandomnessFromBeacon)
   * [StateGetRandomnessFromTickets](#StateGetRandomnessFromTickets)
@@ -293,7 +299,7 @@ Response:
 ```json
 {
   "Version": "string value",
-  "APIVersion": 131584,
+  "APIVersion": 131840,
   "BlockDelay": 42
 }
 ```
@@ -2231,7 +2237,8 @@ Inputs:
     }
   },
   {
-    "MaxFee": "0"
+    "MaxFee": "0",
+    "MsgUuid": "07070707-0707-0707-0707-070707070707"
   },
   [
     {
@@ -2705,7 +2712,8 @@ Inputs:
     }
   ],
   {
-    "MaxFee": "0"
+    "MaxFee": "0",
+    "MsgUuid": "07070707-0707-0707-0707-070707070707"
   }
 ]
 ```
@@ -2963,7 +2971,8 @@ Inputs:
     }
   },
   {
-    "MaxFee": "0"
+    "MaxFee": "0",
+    "MsgUuid": "07070707-0707-0707-0707-070707070707"
   }
 ]
 ```
@@ -4649,11 +4658,31 @@ Perms: read
 Inputs:
 ```json
 [
-  16
+  17
 ]
 ```
 
 Response: `{}`
+
+### StateActorManifestCID
+StateActorManifestCID returns the CID of the builtin actors manifest for the given network version
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  17
+]
+```
+
+Response:
+```json
+{
+  "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+}
+```
 
 ### StateAllMinerFaults
 StateAllMinerFaults returns all non-expired Faults that occur within lookback epochs of the given tipset
@@ -5218,6 +5247,163 @@ Response:
 }
 ```
 
+### StateGetAllocation
+StateGetAllocation returns the allocation for a given address and allocation ID.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "f01234",
+  0,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response:
+```json
+{
+  "Client": 1000,
+  "Provider": 1000,
+  "Data": {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  },
+  "Size": 1032,
+  "TermMin": 10101,
+  "TermMax": 10101,
+  "Expiration": 10101
+}
+```
+
+### StateGetAllocationForPendingDeal
+StateGetAllocationForPendingDeal returns the allocation for a given deal ID of a pending deal.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  5432,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response:
+```json
+{
+  "Client": 1000,
+  "Provider": 1000,
+  "Data": {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  },
+  "Size": 1032,
+  "TermMin": 10101,
+  "TermMax": 10101,
+  "Expiration": 10101
+}
+```
+
+### StateGetAllocations
+StateGetAllocations returns the all the allocations for a given client.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "f01234",
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response: `{}`
+
+### StateGetClaim
+StateGetClaim returns the claim for a given address and claim ID.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "f01234",
+  0,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response:
+```json
+{
+  "Provider": 1000,
+  "Client": 1000,
+  "Data": {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  },
+  "Size": 1032,
+  "TermMin": 10101,
+  "TermMax": 10101,
+  "TermStart": 10101,
+  "Sector": 9
+}
+```
+
+### StateGetClaims
+StateGetClaims returns the all the claims for a given provider.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "f01234",
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response: `{}`
+
 ### StateGetNetworkParams
 StateGetNetworkParams return current network params
 
@@ -5256,7 +5442,9 @@ Response:
     "UpgradeTurboHeight": 10101,
     "UpgradeHyperdriveHeight": 10101,
     "UpgradeChocolateHeight": 10101,
-    "UpgradeOhSnapHeight": 10101
+    "UpgradeOhSnapHeight": 10101,
+    "UpgradeSkyrHeight": 10101,
+    "UpgradeSharkHeight": 10101
   }
 }
 ```
@@ -5533,7 +5721,8 @@ Response:
     "State": {
       "SectorStartEpoch": 10101,
       "LastUpdatedEpoch": 10101,
-      "SlashEpoch": 10101
+      "SlashEpoch": 10101,
+      "VerifiedClaim": 0
     }
   }
 }
@@ -5611,7 +5800,8 @@ Response:
   "State": {
     "SectorStartEpoch": 10101,
     "LastUpdatedEpoch": 10101,
-    "SlashEpoch": 10101
+    "SlashEpoch": 10101,
+    "VerifiedClaim": 0
   }
 }
 ```
@@ -5658,7 +5848,8 @@ Response:
     "ExpectedStoragePledge": "0",
     "ReplacedSectorAge": 10101,
     "ReplacedDayReward": "0",
-    "SectorKeyCID": null
+    "SectorKeyCID": null,
+    "SimpleQAPower": true
   }
 ]
 ```
@@ -5787,7 +5978,20 @@ Response:
   "WindowPoStProofType": 8,
   "SectorSize": 34359738368,
   "WindowPoStPartitionSectors": 42,
-  "ConsensusFaultElapsed": 10101
+  "ConsensusFaultElapsed": 10101,
+  "Beneficiary": "f01234",
+  "BeneficiaryTerm": {
+    "Quota": "0",
+    "UsedQuota": "0",
+    "Expiration": 10101
+  },
+  "PendingBeneficiaryTerm": {
+    "NewBeneficiary": "f01234",
+    "NewQuota": "0",
+    "NewExpiration": 10101,
+    "ApprovedByBeneficiary": true,
+    "ApprovedByNominee": true
+  }
 }
 ```
 
@@ -5812,10 +6016,7 @@ Inputs:
       5432
     ],
     "Expiration": 10101,
-    "ReplaceCapacity": true,
-    "ReplaceSectorDeadline": 42,
-    "ReplaceSectorPartition": 42,
-    "ReplaceSectorNumber": 9
+    "UnsealedCid": null
   },
   [
     {
@@ -5937,10 +6138,7 @@ Inputs:
       5432
     ],
     "Expiration": 10101,
-    "ReplaceCapacity": true,
-    "ReplaceSectorDeadline": 42,
-    "ReplaceSectorPartition": 42,
-    "ReplaceSectorNumber": 9
+    "UnsealedCid": null
   },
   [
     {
@@ -6123,7 +6321,8 @@ Response:
     "ExpectedStoragePledge": "0",
     "ReplacedSectorAge": 10101,
     "ReplacedDayReward": "0",
-    "SectorKeyCID": null
+    "SectorKeyCID": null,
+    "SimpleQAPower": true
   }
 ]
 ```
@@ -6158,7 +6357,7 @@ Inputs:
 ]
 ```
 
-Response: `16`
+Response: `17`
 
 ### StateReadState
 StateReadState returns the indicated actor's state.
@@ -6195,7 +6394,7 @@ Response:
 ### StateReplay
 StateReplay replays a given message, assuming it was included in a block in the specified tipset.
 
-If a tipset key is provided, and a replacing message is found on chain,
+If a tipset key is provided, and a replacing message is not found on chain,
 the method will return an error saying that the message wasn't found
 
 If no tipset key is provided, the appropriate tipset is looked up, and if
@@ -6546,7 +6745,8 @@ Response:
   "ExpectedStoragePledge": "0",
   "ReplacedSectorAge": 10101,
   "ReplacedDayReward": "0",
-  "SectorKeyCID": null
+  "SectorKeyCID": null,
+  "SimpleQAPower": true
 }
 ```
 
@@ -6616,15 +6816,10 @@ Response:
       5432
     ],
     "Expiration": 10101,
-    "ReplaceCapacity": true,
-    "ReplaceSectorDeadline": 42,
-    "ReplaceSectorPartition": 42,
-    "ReplaceSectorNumber": 9
+    "UnsealedCid": null
   },
   "PreCommitDeposit": "0",
-  "PreCommitEpoch": 10101,
-  "DealWeight": "0",
-  "VerifiedDealWeight": "0"
+  "PreCommitEpoch": 10101
 }
 ```
 
@@ -6687,7 +6882,7 @@ Inputs:
 Response: `"0"`
 
 ### StateVerifiedRegistryRootKey
-StateVerifiedClientStatus returns the address of the Verified Registry's root key
+StateVerifiedRegistryRootKey returns the address of the Verified Registry's root key
 
 
 Perms: read

@@ -8,9 +8,11 @@ unexport GOFLAGS
 GOCC?=go
 
 GOVERSION:=$(shell $(GOCC) version | tr ' ' '\n' | grep go1 | sed 's/^go//' | awk -F. '{printf "%d%03d%03d", $$1, $$2, $$3}')
-ifeq ($(shell expr $(GOVERSION) \< 1016000), 1)
+GOVERSIONMIN:=$(shell cat GO_VERSION_MIN | awk -F. '{printf "%d%03d%03d", $$1, $$2, $$3}')
+
+ifeq ($(shell expr $(GOVERSION) \< $(GOVERSIONMIN)), 1)
 $(warning Your Golang version is go$(shell expr $(GOVERSION) / 1000000).$(shell expr $(GOVERSION) % 1000000 / 1000).$(shell expr $(GOVERSION) % 1000))
-$(error Update Golang to version to at least 1.17.9)
+$(error Update Golang to version to at least $(shell cat GO_VERSION_MIN))
 endif
 
 # git modules that need to be loaded
@@ -133,6 +135,18 @@ install-worker:
 install-app:
 	install -C ./$(APP) /usr/local/bin/$(APP)
 
+uninstall: uninstall-daemon uninstall-miner uninstall-worker
+.PHONY: uninstall
+
+uninstall-daemon:
+	rm -f /usr/local/bin/lotus
+
+uninstall-miner:
+	rm -f /usr/local/bin/lotus-miner
+
+uninstall-worker:
+	rm -f /usr/local/bin/lotus-worker
+
 # TOOLS
 
 lotus-seed: $(BUILD_DEPS)
@@ -148,22 +162,10 @@ benchmarks:
 	@curl -X POST 'http://benchmark.kittyhawk.wtf/benchmark' -d '@bench.json' -u "${benchmark_http_cred}"
 .PHONY: benchmarks
 
-lotus-pond: 2k
-	$(GOCC) build -o lotus-pond ./lotuspond
-.PHONY: lotus-pond
-BINS+=lotus-pond
-
-lotus-pond-front:
-	(cd lotuspond/front && npm i && CI=false npm run build)
-.PHONY: lotus-pond-front
-
-lotus-pond-app: lotus-pond-front lotus-pond
-.PHONY: lotus-pond-app
-
 lotus-fountain:
 	rm -f lotus-fountain
-	go build $(GOFLAGS) -o lotus-fountain ./cmd/lotus-fountain
-	go run github.com/GeertJohan/go.rice/rice append --exec lotus-fountain -i ./cmd/lotus-fountain -i ./build
+	$(GOCC) build $(GOFLAGS) -o lotus-fountain ./cmd/lotus-fountain
+	$(GOCC) run github.com/GeertJohan/go.rice/rice append --exec lotus-fountain -i ./cmd/lotus-fountain -i ./build
 .PHONY: lotus-fountain
 BINS+=lotus-fountain
 
@@ -287,13 +289,13 @@ type-gen: api-gen
 	$(GOCC) generate -x ./...
 	goimports -w api/
 
-method-gen: api-gen
-	(cd ./lotuspond/front/src/chain && $(GOCC) run ./methodgen.go)
-
-actors-gen:
+actors-code-gen:
 	$(GOCC) run ./gen/inline-gen . gen/inlinegen-data.json
 	$(GOCC) run ./chain/actors/agen
 	$(GOCC) fmt ./...
+
+actors-gen: actors-code-gen fiximports
+.PHONY: actors-gen
 
 bundle-gen:
 	$(GOCC) run ./gen/bundle
@@ -319,7 +321,7 @@ appimage: lotus
 	cp ./lotus AppDir/usr/bin/
 	appimage-builder
 
-docsgen: docsgen-md docsgen-openrpc
+docsgen: docsgen-md docsgen-openrpc fiximports
 
 docsgen-md-bin: api-gen actors-gen
 	$(GOCC) build $(GOFLAGS) -o docgen-md ./api/docgen/cmd
@@ -336,7 +338,7 @@ docsgen-md-storage: docsgen-md-bin
 docsgen-md-worker: docsgen-md-bin
 	./docgen-md "api/api_worker.go" "Worker" "api" "./api" > documentation/en/api-v0-methods-worker.md
 
-docsgen-openrpc: docsgen-openrpc-full docsgen-openrpc-storage docsgen-openrpc-worker
+docsgen-openrpc: docsgen-openrpc-full docsgen-openrpc-storage docsgen-openrpc-worker docsgen-openrpc-gateway
 
 docsgen-openrpc-full: docsgen-openrpc-bin
 	./docgen-openrpc "api/api_full.go" "FullNode" "api" "./api" -gzip > build/openrpc/full.json.gz
@@ -344,10 +346,15 @@ docsgen-openrpc-storage: docsgen-openrpc-bin
 	./docgen-openrpc "api/api_storage.go" "StorageMiner" "api" "./api" -gzip > build/openrpc/miner.json.gz
 docsgen-openrpc-worker: docsgen-openrpc-bin
 	./docgen-openrpc "api/api_worker.go" "Worker" "api" "./api" -gzip > build/openrpc/worker.json.gz
+docsgen-openrpc-gateway: docsgen-openrpc-bin
+	./docgen-openrpc "api/api_gateway.go" "Gateway" "api" "./api" -gzip > build/openrpc/gateway.json.gz
 
 .PHONY: docsgen docsgen-md-bin docsgen-openrpc-bin
 
-gen: actors-gen type-gen method-gen cfgdoc-gen docsgen api-gen circleci bundle-gen
+fiximports:
+	./scripts/fiximports
+
+gen: actors-code-gen type-gen cfgdoc-gen docsgen api-gen circleci bundle-gen fiximports
 	@echo ">>> IF YOU'VE MODIFIED THE CLI OR CONFIG, REMEMBER TO ALSO MAKE docsgen-cli"
 .PHONY: gen
 

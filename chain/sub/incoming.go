@@ -7,8 +7,21 @@ import (
 	"sync"
 	"time"
 
-	address "github.com/filecoin-project/go-address"
+	lru "github.com/hashicorp/golang-lru"
+	blocks "github.com/ipfs/go-block-format"
+	bserv "github.com/ipfs/go-blockservice"
+	"github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log/v2"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/connmgr"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-legs/dtsync"
+
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/consensus"
@@ -19,17 +32,6 @@ import (
 	"github.com/filecoin-project/lotus/metrics"
 	"github.com/filecoin-project/lotus/node/impl/client"
 	"github.com/filecoin-project/lotus/node/impl/full"
-	lru "github.com/hashicorp/golang-lru"
-	blocks "github.com/ipfs/go-block-format"
-	bserv "github.com/ipfs/go-blockservice"
-	"github.com/ipfs/go-cid"
-	logging "github.com/ipfs/go-log/v2"
-	connmgr "github.com/libp2p/go-libp2p-core/connmgr"
-	"github.com/libp2p/go-libp2p-core/peer"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"go.opencensus.io/stats"
-	"go.opencensus.io/tag"
-	"golang.org/x/xerrors"
 )
 
 var log = logging.Logger("sub")
@@ -157,9 +159,12 @@ func FetchSignedMessagesByCids(
 }
 
 // Fetch `cids` from the block service, apply `cb` on each of them. Used
-//  by the fetch message functions above.
+//
+//	by the fetch message functions above.
+//
 // We check that each block is received only once and we do not received
-//  blocks we did not request.
+//
+//	blocks we did not request.
 func fetchCids(
 	ctx context.Context,
 	bserv bserv.BlockGetter,

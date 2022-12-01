@@ -16,6 +16,7 @@ func main() {
 	logging.SetLogLevel("*", "INFO")
 
 	local := []*cli.Command{
+		addressCmd,
 		base64Cmd,
 		base32Cmd,
 		base16Cmd,
@@ -39,6 +40,7 @@ func main() {
 		marketCmd,
 		miscCmd,
 		mpoolCmd,
+		helloCmd,
 		genesisVerifyCmd,
 		mathCmd,
 		minerCmd,
@@ -71,12 +73,13 @@ func main() {
 		migrationsCmd,
 		diffCmd,
 		itestdCmd,
+		invariantsCmd,
 	}
 
 	app := &cli.App{
 		Name:     "lotus-shed",
 		Usage:    "A place for all the lotus tools",
-		Version:  build.BuildVersion,
+		Version:  build.UserVersion(),
 		Commands: local,
 		Flags: []cli.Flag{
 			&cli.StringFlag{

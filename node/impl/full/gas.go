@@ -6,21 +6,19 @@ import (
 	"math/rand"
 	"sort"
 
-	lbuiltin "github.com/filecoin-project/lotus/chain/actors/builtin"
-
-	"github.com/filecoin-project/go-state-types/builtin"
 	lru "github.com/hashicorp/golang-lru"
-
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/builtin"
 	"github.com/filecoin-project/go-state-types/exitcode"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
+	lbuiltin "github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -260,8 +258,8 @@ func gasEstimateGasLimit(
 ) (int64, error) {
 	msg := *msgIn
 	msg.GasLimit = build.BlockGasLimit
-	msg.GasFeeCap = types.NewInt(uint64(build.MinimumBaseFee) + 1)
-	msg.GasPremium = types.NewInt(1)
+	msg.GasFeeCap = big.Zero()
+	msg.GasPremium = big.Zero()
 
 	fromA, err := smgr.ResolveToKeyAddress(ctx, msgIn.From, currTs)
 	if err != nil {
@@ -292,6 +290,10 @@ func gasEstimateGasLimit(
 	if err != nil {
 		return -1, xerrors.Errorf("CallWithGas failed: %w", err)
 	}
+	if res.MsgRct.ExitCode == exitcode.SysErrOutOfGas {
+		return -1, &api.ErrOutOfGas{}
+	}
+
 	if res.MsgRct.ExitCode != exitcode.Ok {
 		return -1, xerrors.Errorf("message execution failed: exit %s, reason: %s", res.MsgRct.ExitCode, res.Error)
 	}
@@ -358,7 +360,7 @@ func (m *GasModule) GasEstimateMessageGas(ctx context.Context, msg *types.Messag
 	if msg.GasLimit == 0 {
 		gasLimit, err := m.GasEstimateGasLimit(ctx, msg, types.EmptyTSK)
 		if err != nil {
-			return nil, xerrors.Errorf("estimating gas used: %w", err)
+			return nil, err
 		}
 		msg.GasLimit = int64(float64(gasLimit) * m.Mpool.GetConfig().GasLimitOverestimation)
 	}

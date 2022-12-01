@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	path "github.com/filecoin-project/lotus/lib/oldpath"
-
-	cid "github.com/ipfs/go-cid"
+	"github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
 	logging "github.com/ipfs/go-log/v2"
 	dag "github.com/ipfs/go-merkledag"
+
+	path "github.com/filecoin-project/lotus/lib/oldpath"
 )
 
 var log = logging.Logger("pathresolv")
@@ -39,7 +39,8 @@ type ResolveOnce func(ctx context.Context, ds ipld.NodeGetter, nd ipld.Node, nam
 // Resolver provides path resolution to IPFS
 // It has a pointer to a DAGService, which is uses to resolve nodes.
 // TODO: now that this is more modular, try to unify this code with the
-//       the resolvers in namesys
+//
+//	the resolvers in namesys
 type Resolver struct {
 	DAG ipld.NodeGetter
 

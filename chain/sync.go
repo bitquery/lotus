@@ -9,25 +9,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/filecoin-project/lotus/chain/consensus"
-
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
-
 	"github.com/Gurpartap/async"
-	"github.com/filecoin-project/pubsub"
 	"github.com/hashicorp/go-multierror"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
+	ipld "github.com/ipfs/go-ipld-format"
 	logging "github.com/ipfs/go-log/v2"
-	"github.com/libp2p/go-libp2p-core/connmgr"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/connmgr"
+	"github.com/libp2p/go-libp2p/core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/pubsub"
+
+	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
+
 	// named msgarray here to make it clear that these are the types used by
 	// messages, regardless of specs-actors version.
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
@@ -59,16 +60,16 @@ var (
 // Syncer is in charge of running the chain synchronization logic. As such, it
 // is tasked with these functions, amongst others:
 //
-//  * Fast-forwards the chain as it learns of new TipSets from the network via
-//    the SyncManager.
-//  * Applies the fork choice rule to select the correct side when confronted
-//    with a fork in the network.
-//  * Requests block headers and messages from other peers when not available
-//    in our BlockStore.
-//  * Tracks blocks marked as bad in a cache.
-//  * Keeps the BlockStore and ChainStore consistent with our view of the world,
-//    the latter of which in turn informs other components when a reorg has been
-//    committed.
+//   - Fast-forwards the chain as it learns of new TipSets from the network via
+//     the SyncManager.
+//   - Applies the fork choice rule to select the correct side when confronted
+//     with a fork in the network.
+//   - Requests block headers and messages from other peers when not available
+//     in our BlockStore.
+//   - Tracks blocks marked as bad in a cache.
+//   - Keeps the BlockStore and ChainStore consistent with our view of the world,
+//     the latter of which in turn informs other components when a reorg has been
+//     committed.
 //
 // The Syncer does not run workers itself. It's mainly concerned with
 // ensuring a consistent state of chain consensus. The reactive and network-
@@ -670,9 +671,9 @@ func extractSyncState(ctx context.Context) *SyncerState {
 //  2. Check the consistency of beacon entries in the from tipset. We check
 //     total equality of the BeaconEntries in each block.
 //  3. Traverse the chain backwards, for each tipset:
-//  	3a. Load it from the chainstore; if found, it move on to its parent.
-//      3b. Query our peers via client in batches, requesting up to a
-//      maximum of 500 tipsets every time.
+//     3a. Load it from the chainstore; if found, it move on to its parent.
+//     3b. Query our peers via client in batches, requesting up to a
+//     maximum of 500 tipsets every time.
 //
 // Once we've concluded, if we find a mismatching tipset at the height where the
 // anchor tipset should be, we are facing a fork, and we invoke Syncer#syncFork
@@ -763,7 +764,7 @@ loop:
 			at = ts.Parents()
 			continue
 		}
-		if !xerrors.Is(err, bstore.ErrNotFound) {
+		if !ipld.IsNotFound(err) {
 			log.Warnf("loading local tipset: %s", err)
 		}
 
@@ -1170,7 +1171,7 @@ func persistMessages(ctx context.Context, bs bstore.Blockstore, bst *exchange.Co
 //     else we must drop part of our chain to connect to the peer's head
 //     (referred to as "forking").
 //
-//	2. StagePersistHeaders: now that we've collected the missing headers,
+//  2. StagePersistHeaders: now that we've collected the missing headers,
 //     augmented by those on the other side of a fork, we persist them to the
 //     BlockStore.
 //

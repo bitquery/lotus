@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -7,13 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	commcid "github.com/filecoin-project/go-fil-commcid"
 	commp "github.com/filecoin-project/go-fil-commp-hashhash"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/api"
+
+	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/itests/kit"
-	"github.com/stretchr/testify/require"
 )
 
 func TestOfflineDealFlow(t *testing.T) {
@@ -79,7 +81,7 @@ func TestOfflineDealFlow(t *testing.T) {
 		// Create a CAR file from the raw file
 		carFileDir := t.TempDir()
 		carFilePath := filepath.Join(carFileDir, "out.car")
-		err = client.ClientGenCar(ctx, api.FileRef{Path: inFile}, carFilePath)
+		err = client.ClientGenCar(ctx, lapi.FileRef{Path: inFile}, carFilePath)
 		require.NoError(t, err)
 
 		// Import the CAR file on the miner - this is the equivalent to

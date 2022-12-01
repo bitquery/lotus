@@ -1,12 +1,10 @@
-//stm: #unit
+// stm: #unit
 package paychmgr
 
 import (
 	"bytes"
 	"context"
 	"testing"
-
-	paychtypes "github.com/filecoin-project/go-state-types/builtin/v8/paych"
 
 	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
@@ -16,6 +14,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	paychtypes "github.com/filecoin-project/go-state-types/builtin/v8/paych"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	tutils "github.com/filecoin-project/specs-actors/v2/support/testing"

@@ -3,8 +3,9 @@ package adt
 import (
 	"bytes"
 
-	"github.com/filecoin-project/go-state-types/abi"
 	typegen "github.com/whyrusleeping/cbor-gen"
+
+	"github.com/filecoin-project/go-state-types/abi"
 )
 
 // AdtArrayDiff generalizes adt.Array diffing by accepting a Deferred type that can unmarshalled to its corresponding struct
@@ -25,7 +26,7 @@ type AdtArrayDiff interface {
 // - All values that exist in preArr and not in curArr are passed to AdtArrayDiff.Remove()
 // - All values that exist in curArr nnd not in prevArr are passed to adtArrayDiff.Add()
 // - All values that exist in preArr and in curArr are passed to AdtArrayDiff.Modify()
-//  - It is the responsibility of AdtArrayDiff.Modify() to determine if the values it was passed have been modified.
+//   - It is the responsibility of AdtArrayDiff.Modify() to determine if the values it was passed have been modified.
 func DiffAdtArray(preArr, curArr Array, out AdtArrayDiff) error {
 	notNew := make(map[int64]struct{}, curArr.Length())
 	prevVal := new(typegen.Deferred)

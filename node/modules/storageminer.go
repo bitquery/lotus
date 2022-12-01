@@ -11,19 +11,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
-
-	"github.com/filecoin-project/go-paramfetch"
-	"github.com/filecoin-project/go-statestore"
-
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-storedcounter"
 	"github.com/ipfs/go-datastore"
-
+	"github.com/ipfs/go-datastore/namespace"
+	graphsync "github.com/ipfs/go-graphsync/impl"
+	gsnet "github.com/ipfs/go-graphsync/network"
+	"github.com/ipfs/go-graphsync/storeutil"
+	"github.com/libp2p/go-libp2p/core/host"
 	"go.uber.org/fx"
 	"go.uber.org/multierr"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
 	dtimpl "github.com/filecoin-project/go-data-transfer/impl"
 	dtnet "github.com/filecoin-project/go-data-transfer/network"
 	dtgstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
@@ -37,21 +37,13 @@ import (
 	storageimpl "github.com/filecoin-project/go-fil-markets/storagemarket/impl"
 	"github.com/filecoin-project/go-fil-markets/storagemarket/impl/storedask"
 	smnet "github.com/filecoin-project/go-fil-markets/storagemarket/network"
+	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-jsonrpc/auth"
+	"github.com/filecoin-project/go-paramfetch"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-statestore"
 	provider "github.com/filecoin-project/index-provider"
-	"github.com/ipfs/go-datastore/namespace"
-	graphsync "github.com/ipfs/go-graphsync/impl"
-	gsnet "github.com/ipfs/go-graphsync/network"
-	"github.com/ipfs/go-graphsync/storeutil"
-	"github.com/libp2p/go-libp2p-core/host"
-
-	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
-	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
-	sealing "github.com/filecoin-project/lotus/extern/storage-sealing"
-	"github.com/filecoin-project/lotus/extern/storage-sealing/sealiface"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v0api"
@@ -59,10 +51,12 @@ import (
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/gen"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/journal"
+	"github.com/filecoin-project/lotus/lib/retry"
 	"github.com/filecoin-project/lotus/markets"
 	"github.com/filecoin-project/lotus/markets/dagstore"
 	"github.com/filecoin-project/lotus/markets/idxprov"
@@ -73,13 +67,39 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/filecoin-project/lotus/node/repo"
-	"github.com/filecoin-project/lotus/storage"
+	"github.com/filecoin-project/lotus/storage/ctladdr"
+	"github.com/filecoin-project/lotus/storage/paths"
+	sealing "github.com/filecoin-project/lotus/storage/pipeline"
+	"github.com/filecoin-project/lotus/storage/pipeline/sealiface"
+	"github.com/filecoin-project/lotus/storage/sealer"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
+	"github.com/filecoin-project/lotus/storage/wdpost"
 )
 
 var (
-	StorageCounterDSPrefix = "/storage/nextid"
-	StagingAreaDirName     = "deal-staging"
+	StagingAreaDirName = "deal-staging"
 )
+
+type UuidWrapper struct {
+	v1api.FullNode
+}
+
+func (a *UuidWrapper) MpoolPushMessage(ctx context.Context, msg *types.Message, spec *api.MessageSendSpec) (*types.SignedMessage, error) {
+	if spec == nil {
+		spec = new(api.MessageSendSpec)
+	}
+	spec.MsgUuid = uuid.New()
+	errorsToRetry := []error{&jsonrpc.RPCConnectionError{}}
+	initialBackoff, err := time.ParseDuration("1s")
+	if err != nil {
+		return nil, err
+	}
+	return retry.Retry(5, initialBackoff, errorsToRetry, func() (*types.SignedMessage, error) { return a.FullNode.MpoolPushMessage(ctx, msg, spec) })
+}
+
+func MakeUuidWrapper(a v1api.RawFullNodeAPI) v1api.FullNode {
+	return &UuidWrapper{a}
+}
 
 func minerAddrFromDS(ds dtypes.MetadataDS) (address.Address, error) {
 	maddrb, err := ds.Get(context.TODO(), datastore.NewKey("miner-address"))
@@ -140,23 +160,9 @@ func SealProofType(maddr dtypes.MinerAddress, fnapi v1api.FullNode) (abi.Registe
 	return miner.PreferredSealProofTypeFromWindowPoStType(networkVersion, mi.WindowPoStProofType)
 }
 
-type sidsc struct {
-	sc *storedcounter.StoredCounter
-}
-
-func (s *sidsc) Next() (abi.SectorNumber, error) {
-	i, err := s.sc.Next()
-	return abi.SectorNumber(i), err
-}
-
-func SectorIDCounter(ds dtypes.MetadataDS) sealing.SectorIDCounter {
-	sc := storedcounter.New(ds, datastore.NewKey(StorageCounterDSPrefix))
-	return &sidsc{sc}
-}
-
-func AddressSelector(addrConf *config.MinerAddressConfig) func() (*storage.AddressSelector, error) {
-	return func() (*storage.AddressSelector, error) {
-		as := &storage.AddressSelector{}
+func AddressSelector(addrConf *config.MinerAddressConfig) func() (*ctladdr.AddressSelector, error) {
+	return func() (*ctladdr.AddressSelector, error) {
+		as := &ctladdr.AddressSelector{}
 		if addrConf == nil {
 			return as, nil
 		}
@@ -204,32 +210,60 @@ func AddressSelector(addrConf *config.MinerAddressConfig) func() (*storage.Addre
 	}
 }
 
-type StorageMinerParams struct {
+func PreflightChecks(mctx helpers.MetricsCtx, lc fx.Lifecycle, api v1api.FullNode, maddr dtypes.MinerAddress) error {
+	ctx := helpers.LifecycleCtx(mctx, lc)
+
+	lc.Append(fx.Hook{OnStart: func(context.Context) error {
+		mi, err := api.StateMinerInfo(ctx, address.Address(maddr), types.EmptyTSK)
+		if err != nil {
+			return xerrors.Errorf("failed to resolve miner info: %w", err)
+		}
+
+		workerKey, err := api.StateAccountKey(ctx, mi.Worker, types.EmptyTSK)
+		if err != nil {
+			return xerrors.Errorf("failed to resolve worker key: %w", err)
+		}
+
+		has, err := api.WalletHas(ctx, workerKey)
+		if err != nil {
+			return xerrors.Errorf("failed to check wallet for worker key: %w", err)
+		}
+
+		if !has {
+			return xerrors.New("key for worker not found in local wallet")
+		}
+
+		log.Infof("starting up miner %s, worker addr %s", maddr, workerKey)
+		return nil
+	}})
+
+	return nil
+}
+
+type SealingPipelineParams struct {
 	fx.In
 
 	Lifecycle          fx.Lifecycle
 	MetricsCtx         helpers.MetricsCtx
 	API                v1api.FullNode
 	MetadataDS         dtypes.MetadataDS
-	Sealer             sectorstorage.SectorManager
-	SectorIDCounter    sealing.SectorIDCounter
-	Verifier           ffiwrapper.Verifier
-	Prover             ffiwrapper.Prover
+	Sealer             sealer.SectorManager
+	Verifier           storiface.Verifier
+	Prover             storiface.Prover
 	GetSealingConfigFn dtypes.GetSealingConfigFunc
 	Journal            journal.Journal
-	AddrSel            *storage.AddressSelector
+	AddrSel            *ctladdr.AddressSelector
 	Maddr              dtypes.MinerAddress
 }
 
-func StorageMiner(fc config.MinerFeeConfig) func(params StorageMinerParams) (*storage.Miner, error) {
-	return func(params StorageMinerParams) (*storage.Miner, error) {
+func SealingPipeline(fc config.MinerFeeConfig) func(params SealingPipelineParams) (*sealing.Sealing, error) {
+	return func(params SealingPipelineParams) (*sealing.Sealing, error) {
 		var (
 			ds     = params.MetadataDS
 			mctx   = params.MetricsCtx
 			lc     = params.Lifecycle
 			api    = params.API
 			sealer = params.Sealer
-			sc     = params.SectorIDCounter
 			verif  = params.Verifier
 			prover = params.Prover
 			gsd    = params.GetSealingConfigFn
@@ -240,24 +274,34 @@ func StorageMiner(fc config.MinerFeeConfig) func(params StorageMinerParams) (*st
 
 		ctx := helpers.LifecycleCtx(mctx, lc)
 
-		sm, err := storage.NewMiner(api, maddr, ds, sealer, sc, verif, prover, gsd, fc, j, as)
+		evts, err := events.NewEvents(ctx, api)
 		if err != nil {
-			return nil, err
+			return nil, xerrors.Errorf("failed to subscribe to events: %w", err)
 		}
+
+		md, err := api.StateMinerProvingDeadline(ctx, maddr, types.EmptyTSK)
+		if err != nil {
+			return nil, xerrors.Errorf("getting miner info: %w", err)
+		}
+		provingBuffer := md.WPoStProvingPeriod * 2
+		pcp := sealing.NewBasicPreCommitPolicy(api, gsd, provingBuffer)
+
+		pipeline := sealing.New(ctx, api, fc, evts, maddr, ds, sealer, verif, prover, &pcp, gsd, j, as)
 
 		lc.Append(fx.Hook{
 			OnStart: func(context.Context) error {
-				return sm.Run(ctx)
+				go pipeline.Run(ctx)
+				return nil
 			},
-			OnStop: sm.Stop,
+			OnStop: pipeline.Stop,
 		})
 
-		return sm, nil
+		return pipeline, nil
 	}
 }
 
-func WindowPostScheduler(fc config.MinerFeeConfig) func(params StorageMinerParams) (*storage.WindowPoStScheduler, error) {
-	return func(params StorageMinerParams) (*storage.WindowPoStScheduler, error) {
+func WindowPostScheduler(fc config.MinerFeeConfig, pc config.ProvingConfig) func(params SealingPipelineParams) (*wdpost.WindowPoStScheduler, error) {
+	return func(params SealingPipelineParams) (*wdpost.WindowPoStScheduler, error) {
 		var (
 			mctx   = params.MetricsCtx
 			lc     = params.Lifecycle
@@ -271,7 +315,8 @@ func WindowPostScheduler(fc config.MinerFeeConfig) func(params StorageMinerParam
 
 		ctx := helpers.LifecycleCtx(mctx, lc)
 
-		fps, err := storage.NewWindowedPoStScheduler(api, fc, as, sealer, verif, sealer, j, maddr)
+		fps, err := wdpost.NewWindowedPoStScheduler(api, fc, pc, as, sealer, verif, sealer, j, maddr)
+
 		if err != nil {
 			return nil, err
 		}
@@ -737,22 +782,22 @@ func RetrievalProvider(
 var WorkerCallsPrefix = datastore.NewKey("/worker/calls")
 var ManagerWorkPrefix = datastore.NewKey("/stmgr/calls")
 
-func LocalStorage(mctx helpers.MetricsCtx, lc fx.Lifecycle, ls stores.LocalStorage, si stores.SectorIndex, urls stores.URLs) (*stores.Local, error) {
+func LocalStorage(mctx helpers.MetricsCtx, lc fx.Lifecycle, ls paths.LocalStorage, si paths.SectorIndex, urls paths.URLs) (*paths.Local, error) {
 	ctx := helpers.LifecycleCtx(mctx, lc)
-	return stores.NewLocal(ctx, ls, si, urls)
+	return paths.NewLocal(ctx, ls, si, urls)
 }
 
-func RemoteStorage(lstor *stores.Local, si stores.SectorIndex, sa sectorstorage.StorageAuth, sc sectorstorage.Config) *stores.Remote {
-	return stores.NewRemote(lstor, si, http.Header(sa), sc.ParallelFetchLimit, &stores.DefaultPartialFileHandler{})
+func RemoteStorage(lstor *paths.Local, si paths.SectorIndex, sa sealer.StorageAuth, sc sealer.Config) *paths.Remote {
+	return paths.NewRemote(lstor, si, http.Header(sa), sc.ParallelFetchLimit, &paths.DefaultPartialFileHandler{})
 }
 
-func SectorStorage(mctx helpers.MetricsCtx, lc fx.Lifecycle, lstor *stores.Local, stor stores.Store, ls stores.LocalStorage, si stores.SectorIndex, sc sectorstorage.Config, ds dtypes.MetadataDS) (*sectorstorage.Manager, error) {
+func SectorStorage(mctx helpers.MetricsCtx, lc fx.Lifecycle, lstor *paths.Local, stor paths.Store, ls paths.LocalStorage, si paths.SectorIndex, sc sealer.Config, ds dtypes.MetadataDS) (*sealer.Manager, error) {
 	ctx := helpers.LifecycleCtx(mctx, lc)
 
 	wsts := statestore.New(namespace.Wrap(ds, WorkerCallsPrefix))
 	smsts := statestore.New(namespace.Wrap(ds, ManagerWorkPrefix))
 
-	sst, err := sectorstorage.New(ctx, lstor, stor, ls, si, sc, wsts, smsts)
+	sst, err := sealer.New(ctx, lstor, stor, ls, si, sc, wsts, smsts)
 	if err != nil {
 		return nil, err
 	}
@@ -764,7 +809,7 @@ func SectorStorage(mctx helpers.MetricsCtx, lc fx.Lifecycle, lstor *stores.Local
 	return sst, nil
 }
 
-func StorageAuth(ctx helpers.MetricsCtx, ca v0api.Common) (sectorstorage.StorageAuth, error) {
+func StorageAuth(ctx helpers.MetricsCtx, ca v0api.Common) (sealer.StorageAuth, error) {
 	token, err := ca.AuthNew(ctx, []auth.Permission{"admin"})
 	if err != nil {
 		return nil, xerrors.Errorf("creating storage auth header: %w", err)
@@ -772,18 +817,18 @@ func StorageAuth(ctx helpers.MetricsCtx, ca v0api.Common) (sectorstorage.Storage
 
 	headers := http.Header{}
 	headers.Add("Authorization", "Bearer "+string(token))
-	return sectorstorage.StorageAuth(headers), nil
+	return sealer.StorageAuth(headers), nil
 }
 
-func StorageAuthWithURL(apiInfo string) func(ctx helpers.MetricsCtx, ca v0api.Common) (sectorstorage.StorageAuth, error) {
-	return func(ctx helpers.MetricsCtx, ca v0api.Common) (sectorstorage.StorageAuth, error) {
+func StorageAuthWithURL(apiInfo string) func(ctx helpers.MetricsCtx, ca v0api.Common) (sealer.StorageAuth, error) {
+	return func(ctx helpers.MetricsCtx, ca v0api.Common) (sealer.StorageAuth, error) {
 		s := strings.Split(apiInfo, ":")
 		if len(s) != 2 {
 			return nil, errors.New("unexpected format of `apiInfo`")
 		}
 		headers := http.Header{}
 		headers.Add("Authorization", "Bearer "+s[0])
-		return sectorstorage.StorageAuth(headers), nil
+		return sealer.StorageAuth(headers), nil
 	}
 }
 
@@ -938,17 +983,19 @@ func NewSetSealConfigFunc(r repo.LockedRepo) (dtypes.SetSealingConfigFunc, error
 	return func(cfg sealiface.Config) (err error) {
 		err = mutateSealingCfg(r, func(c config.SealingConfiger) {
 			newCfg := config.SealingConfig{
-				MaxWaitDealsSectors:             cfg.MaxWaitDealsSectors,
-				MaxSealingSectors:               cfg.MaxSealingSectors,
-				MaxSealingSectorsForDeals:       cfg.MaxSealingSectorsForDeals,
-				PreferNewSectorsForDeals:        cfg.PreferNewSectorsForDeals,
-				MaxUpgradingSectors:             cfg.MaxUpgradingSectors,
-				CommittedCapacitySectorLifetime: config.Duration(cfg.CommittedCapacitySectorLifetime),
-				WaitDealsDelay:                  config.Duration(cfg.WaitDealsDelay),
-				MakeNewSectorForDeals:           cfg.MakeNewSectorForDeals,
-				MakeCCSectorsAvailable:          cfg.MakeCCSectorsAvailable,
-				AlwaysKeepUnsealedCopy:          cfg.AlwaysKeepUnsealedCopy,
-				FinalizeEarly:                   cfg.FinalizeEarly,
+				MaxWaitDealsSectors:              cfg.MaxWaitDealsSectors,
+				MaxSealingSectors:                cfg.MaxSealingSectors,
+				MaxSealingSectorsForDeals:        cfg.MaxSealingSectorsForDeals,
+				PreferNewSectorsForDeals:         cfg.PreferNewSectorsForDeals,
+				MaxUpgradingSectors:              cfg.MaxUpgradingSectors,
+				CommittedCapacitySectorLifetime:  config.Duration(cfg.CommittedCapacitySectorLifetime),
+				WaitDealsDelay:                   config.Duration(cfg.WaitDealsDelay),
+				MakeNewSectorForDeals:            cfg.MakeNewSectorForDeals,
+				MinUpgradeSectorExpiration:       cfg.MinUpgradeSectorExpiration,
+				MinTargetUpgradeSectorExpiration: cfg.MinTargetUpgradeSectorExpiration,
+				MakeCCSectorsAvailable:           cfg.MakeCCSectorsAvailable,
+				AlwaysKeepUnsealedCopy:           cfg.AlwaysKeepUnsealedCopy,
+				FinalizeEarly:                    cfg.FinalizeEarly,
 
 				CollateralFromMinerBalance: cfg.CollateralFromMinerBalance,
 				AvailableBalanceBuffer:     types.FIL(cfg.AvailableBalanceBuffer),
@@ -979,11 +1026,14 @@ func NewSetSealConfigFunc(r repo.LockedRepo) (dtypes.SetSealingConfigFunc, error
 
 func ToSealingConfig(dealmakingCfg config.DealmakingConfig, sealingCfg config.SealingConfig) sealiface.Config {
 	return sealiface.Config{
-		MaxWaitDealsSectors:             sealingCfg.MaxWaitDealsSectors,
-		MaxSealingSectors:               sealingCfg.MaxSealingSectors,
-		MaxSealingSectorsForDeals:       sealingCfg.MaxSealingSectorsForDeals,
-		PreferNewSectorsForDeals:        sealingCfg.PreferNewSectorsForDeals,
-		MaxUpgradingSectors:             sealingCfg.MaxUpgradingSectors,
+		MaxWaitDealsSectors:              sealingCfg.MaxWaitDealsSectors,
+		MaxSealingSectors:                sealingCfg.MaxSealingSectors,
+		MaxSealingSectorsForDeals:        sealingCfg.MaxSealingSectorsForDeals,
+		PreferNewSectorsForDeals:         sealingCfg.PreferNewSectorsForDeals,
+		MinUpgradeSectorExpiration:       sealingCfg.MinUpgradeSectorExpiration,
+		MinTargetUpgradeSectorExpiration: sealingCfg.MinTargetUpgradeSectorExpiration,
+		MaxUpgradingSectors:              sealingCfg.MaxUpgradingSectors,
+
 		StartEpochSealingBuffer:         abi.ChainEpoch(dealmakingCfg.StartEpochSealingBuffer),
 		MakeNewSectorForDeals:           sealingCfg.MakeNewSectorForDeals,
 		CommittedCapacitySectorLifetime: time.Duration(sealingCfg.CommittedCapacitySectorLifetime),

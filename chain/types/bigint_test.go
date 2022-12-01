@@ -1,4 +1,4 @@
-//stm: #unit
+// stm: #unit
 package types
 
 import (
@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/docker/go-units"
-
 	"github.com/stretchr/testify/assert"
 )
 

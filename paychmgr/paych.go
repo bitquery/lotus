@@ -4,18 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	lpaych "github.com/filecoin-project/lotus/chain/actors/builtin/paych"
-
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	cborutil "github.com/filecoin-project/go-cbor-util"
+	actorstypes "github.com/filecoin-project/go-state-types/actors"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/builtin/v8/paych"
 
 	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/chain/actors"
+	lpaych "github.com/filecoin-project/lotus/chain/actors/builtin/paych"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/lib/sigs"
 )
@@ -90,7 +89,7 @@ func (ca *channelAccessor) messageBuilder(ctx context.Context, from address.Addr
 		return nil, err
 	}
 
-	av, err := actors.VersionForNetwork(nwVersion)
+	av, err := actorstypes.VersionForNetwork(nwVersion)
 	if err != nil {
 		return nil, err
 	}

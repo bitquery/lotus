@@ -6,25 +6,23 @@ import (
 	"os"
 	"path"
 
-	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
-
-	levelds "github.com/ipfs/go-ds-leveldb"
-	ldbopts "github.com/syndtr/goleveldb/leveldb/opt"
-
-	"github.com/filecoin-project/lotus/lib/backupds"
-
-	"github.com/filecoin-project/lotus/node/repo"
 	"github.com/ipfs/go-datastore"
 	dsq "github.com/ipfs/go-datastore/query"
+	levelds "github.com/ipfs/go-ds-leveldb"
 	logging "github.com/ipfs/go-log/v2"
-
-	lcli "github.com/filecoin-project/lotus/cli"
+	ldbopts "github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/urfave/cli/v2"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/urfave/cli/v2"
-	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
+	"github.com/filecoin-project/lotus/chain/types"
+	lcli "github.com/filecoin-project/lotus/cli"
+	"github.com/filecoin-project/lotus/lib/backupds"
+	"github.com/filecoin-project/lotus/node/repo"
 )
 
 var marketCmd = &cli.Command{
@@ -35,6 +33,7 @@ var marketCmd = &cli.Command{
 		marketDealFeesCmd,
 		marketExportDatastoreCmd,
 		marketImportDatastoreCmd,
+		marketDealsTotalStorageCmd,
 	},
 }
 
@@ -281,6 +280,42 @@ var marketImportDatastoreCmd = &cli.Command{
 		}
 
 		fmt.Println("Completed importing from backup file " + backupPath)
+
+		return nil
+	},
+}
+
+var marketDealsTotalStorageCmd = &cli.Command{
+	Name:  "get-deals-total-storage",
+	Usage: "View the total storage available in all active market deals",
+	Action: func(cctx *cli.Context) error {
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		deals, err := api.StateMarketDeals(ctx, types.EmptyTSK)
+		if err != nil {
+			return err
+		}
+
+		total := big.Zero()
+		count := 0
+
+		for _, deal := range deals {
+			if market.IsDealActive(deal.State) {
+				dealStorage := big.NewIntUnsigned(uint64(deal.Proposal.PieceSize))
+				total = big.Add(total, dealStorage)
+				count++
+			}
+
+		}
+
+		fmt.Println("Total deals: ", count)
+		fmt.Println("Total storage: ", total)
 
 		return nil
 	},

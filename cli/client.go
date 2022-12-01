@@ -23,21 +23,19 @@ import (
 	"github.com/chzyer/readline"
 	"github.com/docker/go-units"
 	"github.com/fatih/color"
-	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-cidutil/cidenc"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multibase"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
-
 	"github.com/filecoin-project/go-address"
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
+	"github.com/filecoin-project/go-fil-markets/storagemarket"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-
-	"github.com/filecoin-project/go-fil-markets/storagemarket"
 
 	"github.com/filecoin-project/lotus/api"
 	lapi "github.com/filecoin-project/lotus/api"
@@ -132,7 +130,7 @@ var clientImportCmd = &cli.Command{
 		ctx := ReqContext(cctx)
 
 		if cctx.NArg() != 1 {
-			return xerrors.New("expected input path as the only arg")
+			return IncorrectNumArgs(cctx)
 		}
 
 		absPath, err := filepath.Abs(cctx.Args().First())
@@ -214,8 +212,8 @@ var clientCommPCmd = &cli.Command{
 		defer closer()
 		ctx := ReqContext(cctx)
 
-		if cctx.Args().Len() != 1 {
-			return fmt.Errorf("usage: commP <inputPath>")
+		if cctx.NArg() != 1 {
+			return IncorrectNumArgs(cctx)
 		}
 
 		ret, err := api.ClientCalcCommP(ctx, cctx.Args().Get(0))
@@ -230,6 +228,7 @@ var clientCommPCmd = &cli.Command{
 
 		fmt.Println("CID: ", encoder.Encode(ret.Root))
 		fmt.Println("Piece size: ", types.SizeStr(types.NewInt(uint64(ret.Size))))
+		fmt.Println("Piece size in bytes: ", types.NewInt(uint64(ret.Size)))
 		return nil
 	},
 }
@@ -246,8 +245,8 @@ var clientCarGenCmd = &cli.Command{
 		defer closer()
 		ctx := ReqContext(cctx)
 
-		if cctx.Args().Len() != 2 {
-			return fmt.Errorf("usage: generate-car <inputPath> <outputPath>")
+		if cctx.NArg() != 2 {
+			return IncorrectNumArgs(cctx)
 		}
 
 		ref := lapi.FileRef{
@@ -377,7 +376,7 @@ The minimum value is 518400 (6 months).`,
 		afmt := NewAppFmt(cctx.App)
 
 		if cctx.NArg() != 4 {
-			return xerrors.New(expectedArgsMsg)
+			return IncorrectNumArgs(cctx)
 		}
 
 		// [data, miner, price, dur]
@@ -559,6 +558,10 @@ func interactiveDeal(cctx *cli.Context) error {
 		a = def
 	}
 
+	if _, err := api.StateGetActor(ctx, a, types.EmptyTSK); err != nil {
+		return xerrors.Errorf("address not initialized on chain: %w", err)
+	}
+
 	fromBal, err := api.WalletBalance(ctx, a)
 	if err != nil {
 		return xerrors.Errorf("checking from address balance: %w", err)
@@ -622,8 +625,9 @@ uiLoop:
 				continue
 			}
 
-			if days < int(build.MinDealDuration/builtin.EpochsInDay) {
-				printErr(xerrors.Errorf("minimum duration is %d days", int(build.MinDealDuration/builtin.EpochsInDay)))
+			minDealDurationDays := uint64(build.MinDealDuration) / (builtin.SecondsInDay / build.BlockDelaySecs)
+			if days < int(minDealDurationDays) {
+				printErr(xerrors.Errorf("minimum duration is %d days", minDealDurationDays))
 				continue
 			}
 

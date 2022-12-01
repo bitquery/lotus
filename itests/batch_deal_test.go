@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -8,17 +8,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 	"github.com/stretchr/testify/require"
 
-	"github.com/filecoin-project/lotus/extern/storage-sealing/sealiface"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+
 	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/filecoin-project/lotus/markets/storageadapter"
 	"github.com/filecoin-project/lotus/node"
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/filecoin-project/lotus/storage/pipeline/sealiface"
 )
 
 func TestBatchDealInput(t *testing.T) {
@@ -73,7 +74,7 @@ func TestBatchDealInput(t *testing.T) {
 			require.NoError(t, err)
 
 			checkNoPadding := func() {
-				sl, err := miner.SectorsList(ctx)
+				sl, err := miner.SectorsListNonGenesis(ctx)
 				require.NoError(t, err)
 
 				sort.Slice(sl, func(i, j int) bool {
@@ -124,7 +125,7 @@ func TestBatchDealInput(t *testing.T) {
 
 			checkNoPadding()
 
-			sl, err := miner.SectorsList(ctx)
+			sl, err := miner.SectorsListNonGenesis(ctx)
 			require.NoError(t, err)
 			require.Equal(t, len(sl), expectSectors)
 		}

@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
 	"github.com/urfave/cli/v2"
 
-	"github.com/ipfs/go-cid"
-
 	"github.com/filecoin-project/go-address"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
@@ -174,8 +174,8 @@ var staterootStatCmd = &cli.Command{
 		}
 
 		outcap := 10
-		if cctx.Args().Len() > outcap {
-			outcap = cctx.Args().Len()
+		if cctx.NArg() > outcap {
+			outcap = cctx.NArg()
 		}
 		if len(infos) < outcap {
 			outcap = len(infos)

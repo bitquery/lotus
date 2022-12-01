@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,9 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"golang.org/x/xerrors"
-
 	"github.com/ipfs/go-datastore"
+	"golang.org/x/xerrors"
 )
 
 var loghead = datastore.NewKey("/backupds/log/head") // string([logfile base name];[uuid];[unix ts])
@@ -24,7 +22,7 @@ func (d *Datastore) startLog(logdir string) error {
 		return xerrors.Errorf("mkdir logdir ('%s'): %w", logdir, err)
 	}
 
-	files, err := ioutil.ReadDir(logdir)
+	files, err := os.ReadDir(logdir)
 	if err != nil {
 		return xerrors.Errorf("read logdir ('%s'): %w", logdir, err)
 	}

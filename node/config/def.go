@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding"
-
 	"os"
 	"strconv"
 	"time"
@@ -16,7 +15,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/types"
-	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
+	"github.com/filecoin-project/lotus/storage/sealer"
 )
 
 const (
@@ -96,7 +95,8 @@ func DefaultFullNode() *FullNode {
 				HotStoreType:  "badger",
 				MarkSetType:   "badger",
 
-				HotStoreFullGCFrequency: 20,
+				HotStoreFullGCFrequency:  20,
+				ColdStoreFullGCFrequency: 7,
 			},
 		},
 	}
@@ -146,6 +146,7 @@ func DefaultStorageMiner() *StorageMiner {
 		},
 
 		Storage: SealerConfig{
+			AllowSectorDownload:      true,
 			AllowAddPiece:            true,
 			AllowPreCommit1:          true,
 			AllowPreCommit2:          true,
@@ -159,8 +160,10 @@ func DefaultStorageMiner() *StorageMiner {
 			// it's the ratio between 10gbit / 1gbit
 			ParallelFetchLimit: 10,
 
+			Assigner: "utilization",
+
 			// By default use the hardware resource filtering strategy.
-			ResourceFiltering: sectorstorage.ResourceFilteringHardware,
+			ResourceFiltering: sealer.ResourceFilteringHardware,
 		},
 
 		Dealmaking: DealmakingConfig{

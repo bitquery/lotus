@@ -5,16 +5,14 @@ import (
 	"sort"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/builtin"
-	minertypes "github.com/filecoin-project/go-state-types/builtin/v8/miner"
-
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/builtin"
+	minertypes "github.com/filecoin-project/go-state-types/builtin/v9/miner"
 	"github.com/filecoin-project/go-state-types/network"
-
 	miner5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/miner"
 
 	"github.com/filecoin-project/lotus/chain/actors"
@@ -179,9 +177,9 @@ func (stage *PreCommitStage) packMiner(
 	}
 
 	expiration := epoch + policy.GetMaxSectorExpirationExtension()
-	infos := make([]minertypes.SectorPreCommitInfo, len(sectorNos))
+	infos := make([]minertypes.PreCommitSectorParams, len(sectorNos))
 	for i, sno := range sectorNos {
-		infos[i] = minertypes.SectorPreCommitInfo{
+		infos[i] = minertypes.PreCommitSectorParams{
 			SealProof:     sealType,
 			SectorNumber:  sno,
 			SealedCID:     mock.MockCommR(minerAddr, sno),
@@ -230,7 +228,7 @@ func (stage *PreCommitStage) packMiner(
 			}
 
 			for _, info := range batch {
-				if err := stage.committer.EnqueueProveCommit(minerAddr, epoch, info); err != nil {
+				if err := stage.committer.EnqueueProveCommit(minerAddr, epoch, toSectorPreCommitInfo(info)); err != nil {
 					return added, false, err
 				}
 				added++
@@ -255,7 +253,7 @@ func (stage *PreCommitStage) packMiner(
 			return added, false, err
 		}
 
-		if err := stage.committer.EnqueueProveCommit(minerAddr, epoch, info); err != nil {
+		if err := stage.committer.EnqueueProveCommit(minerAddr, epoch, toSectorPreCommitInfo(info)); err != nil {
 			return added, false, err
 		}
 		added++
@@ -347,4 +345,16 @@ func (stage *PreCommitStage) load(ctx context.Context, bb *blockbuilder.BlockBui
 
 	stage.initialized = true
 	return nil
+}
+
+func toSectorPreCommitInfo(param minertypes.PreCommitSectorParams) minertypes.SectorPreCommitInfo {
+	return minertypes.SectorPreCommitInfo{
+		SealProof:     param.SealProof,
+		SectorNumber:  param.SectorNumber,
+		SealedCID:     param.SealedCID,
+		SealRandEpoch: param.SealRandEpoch,
+		DealIDs:       param.DealIDs,
+		Expiration:    param.Expiration,
+		UnsealedCid:   nil,
+	}
 }

@@ -15,7 +15,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/chain/actors/adt"
-	minertypes "github.com/filecoin-project/go-state-types/builtin/v8/miner"
+	minertypes "github.com/filecoin-project/go-state-types/builtin/v{{.latestVersion}}/miner"
 
 {{if (le .v 7)}}
     {{if (ge .v 3)}}
@@ -413,6 +413,10 @@ func (s *state{{.v}}) Info() (MinerInfo, error) {
 		SectorSize:                 info.SectorSize,
 		WindowPoStPartitionSectors: info.WindowPoStPartitionSectors,
 		ConsensusFaultElapsed:      {{if (ge .v 2)}}info.ConsensusFaultElapsed{{else}}-1{{end}},
+		{{if (ge .v 9)}}
+		Beneficiary:                info.Beneficiary,
+		BeneficiaryTerm:            info.BeneficiaryTerm,
+		PendingBeneficiaryTerm:     info.PendingBeneficiaryTerm,{{end}}
 	}
 
 	return mi, nil
@@ -580,13 +584,19 @@ func fromV{{.v}}SectorOnChainInfo(v{{.v}} miner{{.v}}.SectorOnChainInfo) SectorO
 }
 
 func fromV{{.v}}SectorPreCommitOnChainInfo(v{{.v}} miner{{.v}}.SectorPreCommitOnChainInfo) minertypes.SectorPreCommitOnChainInfo {
-	return minertypes.SectorPreCommitOnChainInfo{
-		Info:               (minertypes.SectorPreCommitInfo)(v{{.v}}.Info),
+	{{if (le .v 8)}}return minertypes.SectorPreCommitOnChainInfo{
+		Info:               minertypes.SectorPreCommitInfo{
+			SealProof:     v{{.v}}.Info.SealProof,
+			SectorNumber:  v{{.v}}.Info.SectorNumber,
+			SealedCID:     v{{.v}}.Info.SealedCID,
+			SealRandEpoch: v{{.v}}.Info.SealRandEpoch,
+			DealIDs:       v{{.v}}.Info.DealIDs,
+			Expiration:    v{{.v}}.Info.Expiration,
+			UnsealedCid:   nil,
+		},
 		PreCommitDeposit:   v{{.v}}.PreCommitDeposit,
 		PreCommitEpoch:     v{{.v}}.PreCommitEpoch,
-		DealWeight:         v{{.v}}.DealWeight,
-		VerifiedDealWeight: v{{.v}}.VerifiedDealWeight,
-	}
+	}{{else}}return v{{.v}}{{end}}
 }
 
 func (s *state{{.v}}) GetState() interface{} {

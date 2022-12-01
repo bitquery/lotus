@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -7,15 +7,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/builtin"
-	minertypes "github.com/filecoin-project/go-state-types/builtin/v8/miner"
+	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/builtin"
+	minertypes "github.com/filecoin-project/go-state-types/builtin/v8/miner"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/go-state-types/network"
+	miner2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -23,13 +28,9 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/extern/sector-storage/mock"
 	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/filecoin-project/lotus/node/impl"
-	miner2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
-	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	"github.com/stretchr/testify/require"
+	"github.com/filecoin-project/lotus/storage/sealer/mock"
 )
 
 // TestDeadlineToggling:
@@ -63,7 +64,7 @@ func TestDeadlineToggling(t *testing.T) {
 
 	//stm: @CHAIN_INCOMING_HANDLE_INCOMING_BLOCKS_001, @CHAIN_INCOMING_VALIDATE_BLOCK_PUBSUB_001, @CHAIN_INCOMING_VALIDATE_MESSAGE_PUBSUB_001
 	//stm: @MINER_SECTOR_LIST_001
-	kit.Expensive(t)
+	//kit.Expensive(t)
 
 	kit.QuietMiningLogs()
 
@@ -307,7 +308,7 @@ func TestDeadlineToggling(t *testing.T) {
 	// terminate sectors on minerD
 	{
 		var terminationDeclarationParams []miner2.TerminationDeclaration
-		secs, err := minerD.SectorsList(ctx)
+		secs, err := minerD.SectorsListNonGenesis(ctx)
 		require.NoError(t, err)
 		require.Len(t, secs, sectorsD)
 
