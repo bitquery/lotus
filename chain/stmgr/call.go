@@ -5,12 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
@@ -337,24 +335,24 @@ type callTracer struct {
 
 func (tracer *callTracer) MessageApplied(ctx context.Context, ts *types.TipSet, c cid.Cid, m *types.Message, ret *vm.ApplyRet, implicit bool) error {
 	tracer.array = append(tracer.array, &api.InvocResult{
-    			MsgCid:         c,
-    			Msg:            m,
-    			MsgRct:         &ret.MessageReceipt,
-    			GasCost:        MakeMsgGasCostWithCheck(m, ret),
-    			ExecutionTrace: ret.ExecutionTrace,
-    			Error:          "",
-    			Duration:       ret.Duration,
-    		})
-    		return nil
+		MsgCid:         c,
+		Msg:            m,
+		MsgRct:         &ret.MessageReceipt,
+		GasCost:        MakeMsgGasCostWithCheck(m, ret),
+		ExecutionTrace: ret.ExecutionTrace,
+		Error:          "",
+		Duration:       ret.Duration,
+	})
+	return nil
 }
 
 func (sm *StateManager) PlayAllMessagesInTipset(ctx context.Context, ts *types.TipSet) ([]*api.InvocResult, error) {
 
-    tracer := &callTracer{
-        array:  make([]*api.InvocResult, 0),
-    }
+	tracer := &callTracer{
+		array: make([]*api.InvocResult, 0),
+	}
 
-    _, _, err := sm.tsExec.ExecuteTipSet(ctx, sm, ts, tracer)
+	_, _, err := sm.tsExec.ExecuteTipSet(ctx, sm, ts, tracer, true)
 
 	if err != nil {
 		return nil, err
