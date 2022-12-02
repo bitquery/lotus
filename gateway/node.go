@@ -430,6 +430,15 @@ func (gw *Node) StateGetActor(ctx context.Context, actor address.Address, tsk ty
 	return gw.target.StateGetActor(ctx, actor, tsk)
 }
 
+func (gw *Node) StateMultiGetActor(ctx context.Context, actors []address.Address, tsk types.TipSetKey) ([]*types.Actor, error) {
+	// TODO: implement me
+	// Unfortunately, we did not have enough time to investigate.
+	// We are not sure if this method is necessary.
+	// But decided to mock it to maintain backward compatibility with releases.
+	// Otherwise, the node does not satisfy the interface.
+	panic("StateMultiGetActor: implement me")
+}
+
 func (gw *Node) StateListMiners(ctx context.Context, tsk types.TipSetKey) ([]address.Address, error) {
 	if err := gw.limit(ctx, stateRateLimitTokens); err != nil {
 		return nil, err
