@@ -5,16 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/fx"
-	"golang.org/x/xerrors"
 	"strconv"
 
 	"github.com/ipfs/go-cid"
+	cboripld "github.com/ipfs/go-ipld-cbor"
 	"github.com/libp2p/go-libp2p/core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
-	cboripld "github.com/ipfs/go-ipld-cbor"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
