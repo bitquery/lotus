@@ -10,30 +10,24 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
-	market8 "github.com/filecoin-project/go-state-types/builtin/v8/market"
-
+	"github.com/ipfs/go-blockservice"
+	"github.com/ipfs/go-cid"
 	bstore "github.com/ipfs/go-ipfs-blockstore"
+	offline "github.com/ipfs/go-ipfs-exchange-offline"
+	files "github.com/ipfs/go-ipfs-files"
 	format "github.com/ipfs/go-ipld-format"
+	logging "github.com/ipfs/go-log/v2"
+	"github.com/ipfs/go-merkledag"
 	unixfile "github.com/ipfs/go-unixfs/file"
 	"github.com/ipld/go-car"
 	"github.com/ipld/go-car/util"
 	carv2 "github.com/ipld/go-car/v2"
 	carv2bs "github.com/ipld/go-car/v2/blockstore"
-	"github.com/ipld/go-ipld-prime/datamodel"
-	"golang.org/x/xerrors"
-
-	"github.com/filecoin-project/go-padreader"
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-state-types/dline"
-	"github.com/ipfs/go-blockservice"
-	"github.com/ipfs/go-cid"
-	offline "github.com/ipfs/go-ipfs-exchange-offline"
-	files "github.com/ipfs/go-ipfs-files"
-	logging "github.com/ipfs/go-log/v2"
-	"github.com/ipfs/go-merkledag"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/traversal"
@@ -41,41 +35,42 @@ import (
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	textselector "github.com/ipld/go-ipld-selector-text-lite"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multibase"
 	"go.uber.org/fx"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	cborutil "github.com/filecoin-project/go-cbor-util"
 	"github.com/filecoin-project/go-commp-utils/writer"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-
 	"github.com/filecoin-project/go-fil-markets/discovery"
 	rm "github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket/network"
 	"github.com/filecoin-project/go-fil-markets/stores"
-
-	"github.com/filecoin-project/lotus/lib/unixfs"
-	"github.com/filecoin-project/lotus/markets/retrievaladapter"
-	"github.com/filecoin-project/lotus/markets/storageadapter"
-
+	"github.com/filecoin-project/go-padreader"
 	"github.com/filecoin-project/go-state-types/abi"
-
-	"github.com/filecoin-project/lotus/node/config"
-	"github.com/filecoin-project/lotus/node/repo/imports"
+	"github.com/filecoin-project/go-state-types/big"
+	markettypes "github.com/filecoin-project/go-state-types/builtin/v9/market"
+	"github.com/filecoin-project/go-state-types/dline"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/lib/unixfs"
+	"github.com/filecoin-project/lotus/markets/retrievaladapter"
+	"github.com/filecoin-project/lotus/markets/storageadapter"
 	"github.com/filecoin-project/lotus/markets/utils"
+	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/impl/full"
 	"github.com/filecoin-project/lotus/node/impl/paych"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/repo"
+	"github.com/filecoin-project/lotus/node/repo/imports"
 )
 
 var log = logging.Logger("client")
@@ -103,6 +98,7 @@ type API struct {
 	Imports                   dtypes.ClientImportMgr
 	StorageBlockstoreAccessor storagemarket.BlockstoreAccessor
 	RtvlBlockstoreAccessor    rm.BlockstoreAccessor
+	ApiBlockstoreAccessor     *retrievaladapter.APIBlockstoreAccessor
 
 	DataTransfer dtypes.ClientDataTransfer
 	Host         host.Host
@@ -234,12 +230,12 @@ func (a *API) dealStarter(ctx context.Context, params *api.StartDealParams, isSt
 	// stateless flow from here to the end
 	//
 
-	label, err := market8.NewLabelFromString(params.Data.Root.Encode(multibase.MustNewEncoder('u')))
+	label, err := markettypes.NewLabelFromString(params.Data.Root.Encode(multibase.MustNewEncoder('u')))
 	if err != nil {
 		return nil, xerrors.Errorf("failed to encode label: %w", err)
 	}
 
-	dealProposal := &market8.DealProposal{
+	dealProposal := &markettypes.DealProposal{
 		PieceCID:             *params.Data.PieceCid,
 		PieceSize:            params.Data.PieceSize.Padded(),
 		Client:               walletKey,
@@ -271,7 +267,7 @@ func (a *API) dealStarter(ctx context.Context, params *api.StartDealParams, isSt
 		return nil, xerrors.Errorf("failed to sign proposal : %w", err)
 	}
 
-	dealProposalSigned := &market8.ClientDealProposal{
+	dealProposalSigned := &markettypes.ClientDealProposal{
 		Proposal:        *dealProposal,
 		ClientSignature: *dealProposalSig,
 	}
@@ -666,7 +662,10 @@ func (a *API) ClientImportLocal(ctx context.Context, r io.Reader) (cid.Cid, erro
 	headerOff := reader.Header.DataOffset
 
 	// read the old header.
-	dr := reader.DataReader()
+	dr, err := reader.DataReader()
+	if err != nil {
+		return cid.Undef, fmt.Errorf("failed to get car data reader: %w", err)
+	}
 	header, err := readHeader(dr)
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("failed to read car reader: %w", err)
@@ -840,7 +839,7 @@ func (a *API) doRetrieval(ctx context.Context, order api.RetrievalOrder, sel dat
 		return 0, xerrors.Errorf("cannot make retrieval deal for zero bytes")
 	}
 
-	ppb := types.BigDiv(order.Total, types.NewInt(order.Size))
+	ppb := types.BigDiv(big.Sub(order.Total, order.UnsealPrice), types.NewInt(order.Size))
 
 	params, err := rm.NewParamsV1(ppb, order.PaymentInterval, order.PaymentIntervalIncrease, sel, order.Piece, order.UnsealPrice)
 	if err != nil {
@@ -848,6 +847,13 @@ func (a *API) doRetrieval(ctx context.Context, order api.RetrievalOrder, sel dat
 	}
 
 	id := a.Retrieval.NextID()
+
+	if order.RemoteStore != nil {
+		if err := a.ApiBlockstoreAccessor.RegisterDealToRetrievalStore(id, *order.RemoteStore); err != nil {
+			return 0, xerrors.Errorf("registering api store: %w", err)
+		}
+	}
+
 	id, err = a.Retrieval.Retrieve(
 		ctx,
 		id,
@@ -1002,6 +1008,8 @@ func (a *API) outputCAR(ctx context.Context, ds format.DAGService, bs bstore.Blo
 		roots[i] = dag.root
 	}
 
+	var lk sync.Mutex
+
 	return dest.doWrite(func(w io.Writer) error {
 
 		if err := car.WriteHeader(&car.CarHeader{
@@ -1014,13 +1022,29 @@ func (a *API) outputCAR(ctx context.Context, ds format.DAGService, bs bstore.Blo
 		cs := cid.NewSet()
 
 		for _, dagSpec := range dags {
+			dagSpec := dagSpec
+
 			if err := utils.TraverseDag(
 				ctx,
 				ds,
 				root,
 				dagSpec.selector,
+				func(node format.Node) error {
+					// if we're exporting merkle proofs for this dag, export all nodes read by the traversal
+					if dagSpec.exportAll {
+						lk.Lock()
+						defer lk.Unlock()
+						if cs.Visit(node.Cid()) {
+							err := util.LdWrite(w, node.Cid().Bytes(), node.RawData())
+							if err != nil {
+								return xerrors.Errorf("writing block data: %w", err)
+							}
+						}
+					}
+					return nil
+				},
 				func(p traversal.Progress, n ipld.Node, r traversal.VisitReason) error {
-					if r == traversal.VisitReason_SelectionMatch {
+					if !dagSpec.exportAll && r == traversal.VisitReason_SelectionMatch {
 						var c cid.Cid
 						if p.LastBlock.Link == nil {
 							c = root
@@ -1085,8 +1109,9 @@ func (a *API) outputUnixFS(ctx context.Context, root cid.Cid, ds format.DAGServi
 }
 
 type dagSpec struct {
-	root     cid.Cid
-	selector ipld.Node
+	root      cid.Cid
+	selector  ipld.Node
+	exportAll bool
 }
 
 func parseDagSpec(ctx context.Context, root cid.Cid, dsp []api.DagSpec, ds format.DAGService, car bool) ([]dagSpec, error) {
@@ -1101,6 +1126,7 @@ func parseDagSpec(ctx context.Context, root cid.Cid, dsp []api.DagSpec, ds forma
 
 	out := make([]dagSpec, len(dsp))
 	for i, spec := range dsp {
+		out[i].exportAll = spec.ExportMerkleProof
 
 		if spec.DataSelector == nil {
 			return nil, xerrors.Errorf("invalid DagSpec at position %d: `DataSelector` can not be nil", i)
@@ -1134,6 +1160,7 @@ func parseDagSpec(ctx context.Context, root cid.Cid, dsp []api.DagSpec, ds forma
 			ds,
 			root,
 			rsn,
+			nil,
 			func(p traversal.Progress, n ipld.Node, r traversal.VisitReason) error {
 				if r == traversal.VisitReason_SelectionMatch {
 					if !car && p.LastBlock.Path.String() != p.Path.String() {

@@ -5,13 +5,14 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/messagepool/gasguess"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/ipfs/go-cid"
 )
 
 const repubMsgLimit = 30
@@ -78,7 +79,7 @@ func (mp *MessagePool) republishPendingMessages(ctx context.Context) error {
 		return chains[i].Before(chains[j])
 	})
 
-	gasLimit := int64(build.BlockGasLimit)
+	gasLimit := build.BlockGasLimit
 	minGas := int64(gasguess.MinGas)
 	var msgs []*types.SignedMessage
 loop:

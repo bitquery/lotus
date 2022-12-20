@@ -15,11 +15,11 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/pb"
 	"github.com/dustin/go-humanize"
-	"github.com/filecoin-project/go-state-types/abi"
 	block "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
+	ipld "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-merkledag"
 	"github.com/ipld/go-car"
 	"github.com/multiformats/go-base32"
@@ -28,9 +28,10 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-state-types/abi"
+
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/store"
-	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/cmd/lotus-shed/shedgen"
 	"github.com/filecoin-project/lotus/node/repo"
@@ -123,22 +124,9 @@ var exportChainCmd = &cli.Command{
 		fullstate := cctx.Bool("full-state")
 		skipoldmsgs := cctx.Bool("skip-old-msgs")
 
-		var ts *types.TipSet
-		if tss := cctx.String("tipset"); tss != "" {
-			cids, err := lcli.ParseTipSetString(tss)
-			if err != nil {
-				return xerrors.Errorf("failed to parse tipset (%q): %w", tss, err)
-			}
-
-			tsk := types.NewTipSetKey(cids...)
-
-			selts, err := cs.LoadTipSet(context.Background(), tsk)
-			if err != nil {
-				return xerrors.Errorf("loading tipset: %w", err)
-			}
-			ts = selts
-		} else {
-			ts = cs.GetHeaviestTipSet()
+		ts, err := lcli.ParseTipSetRefOffline(ctx, cs, cctx.String("tipset"))
+		if err != nil {
+			return err
 		}
 
 		if fullstate {
@@ -354,7 +342,7 @@ func (rc *rawCarb) Has(ctx context.Context, c cid.Cid) (bool, error) {
 func (rc *rawCarb) Get(ctx context.Context, c cid.Cid) (block.Block, error) {
 	b, has := rc.blocks[c]
 	if !has {
-		return nil, blockstore.ErrNotFound
+		return nil, ipld.ErrNotFound{Cid: c}
 	}
 	return b, nil
 }
@@ -362,7 +350,7 @@ func (rc *rawCarb) Get(ctx context.Context, c cid.Cid) (block.Block, error) {
 func (rc *rawCarb) GetSize(ctx context.Context, c cid.Cid) (int, error) {
 	b, has := rc.blocks[c]
 	if !has {
-		return 0, blockstore.ErrNotFound
+		return 0, ipld.ErrNotFound{Cid: c}
 	}
 	return len(b.RawData()), nil
 }

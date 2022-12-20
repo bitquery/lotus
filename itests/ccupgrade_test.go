@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/network"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/network"
 
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/itests/kit"
@@ -60,11 +60,11 @@ func runTestCCUpgrade(t *testing.T) *kit.TestFullNode {
 		t.Fatal(err)
 	}
 
-	CCUpgrade := abi.SectorNumber(kit.DefaultPresealsPerBootstrapMiner + 1)
+	CCUpgrade := abi.SectorNumber(kit.DefaultPresealsPerBootstrapMiner)
 	fmt.Printf("CCUpgrade: %d\n", CCUpgrade)
 
 	miner.PledgeSectors(ctx, 1, 0, nil)
-	sl, err := miner.SectorsList(ctx)
+	sl, err := miner.SectorsListNonGenesis(ctx)
 	require.NoError(t, err)
 	require.Len(t, sl, 1, "expected 1 sector")
 	require.Equal(t, CCUpgrade, sl[0], "unexpected sector number")
@@ -79,7 +79,7 @@ func runTestCCUpgrade(t *testing.T) *kit.TestFullNode {
 	err = miner.SectorMarkForUpgrade(ctx, sl[0], true)
 	require.NoError(t, err)
 
-	sl, err = miner.SectorsList(ctx)
+	sl, err = miner.SectorsListNonGenesis(ctx)
 	require.NoError(t, err)
 	require.Len(t, sl, 1, "expected 1 sector")
 

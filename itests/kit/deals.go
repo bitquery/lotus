@@ -4,20 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
-	"github.com/filecoin-project/go-fil-markets/shared_testutil"
-	"github.com/filecoin-project/go-fil-markets/storagemarket"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/types"
-	sealing "github.com/filecoin-project/lotus/extern/storage-sealing"
 	"github.com/ipfs/go-cid"
 	files "github.com/ipfs/go-ipfs-files"
 	ipld "github.com/ipfs/go-ipld-format"
@@ -27,6 +18,17 @@ import (
 	"github.com/ipld/go-car"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
+	"github.com/filecoin-project/go-fil-markets/shared_testutil"
+	"github.com/filecoin-project/go-fil-markets/storagemarket"
+	"github.com/filecoin-project/go-state-types/abi"
+
+	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/types"
+	sealing "github.com/filecoin-project/lotus/storage/pipeline"
 )
 
 type DealHarness struct {
@@ -291,7 +293,7 @@ func (dh *DealHarness) WaitDealPublished(ctx context.Context, deal *cid.Cid) {
 }
 
 func (dh *DealHarness) StartSealingWaiting(ctx context.Context) {
-	snums, err := dh.main.SectorsList(ctx)
+	snums, err := dh.main.SectorsListNonGenesis(ctx)
 	require.NoError(dh.t, err)
 	for _, snum := range snums {
 		si, err := dh.main.SectorsStatus(ctx, snum, false)
@@ -307,6 +309,12 @@ func (dh *DealHarness) StartSealingWaiting(ctx context.Context) {
 }
 
 func (dh *DealHarness) PerformRetrieval(ctx context.Context, deal *cid.Cid, root cid.Cid, carExport bool, offers ...api.QueryOffer) (path string) {
+	return dh.PerformRetrievalWithOrder(ctx, deal, root, carExport, func(offer api.QueryOffer, a address.Address) api.RetrievalOrder {
+		return offer.Order(a)
+	}, offers...)
+}
+
+func (dh *DealHarness) PerformRetrievalWithOrder(ctx context.Context, deal *cid.Cid, root cid.Cid, carExport bool, makeOrder func(api.QueryOffer, address.Address) api.RetrievalOrder, offers ...api.QueryOffer) (path string) {
 	var offer api.QueryOffer
 	if len(offers) == 0 {
 		// perform retrieval.
@@ -321,10 +329,7 @@ func (dh *DealHarness) PerformRetrieval(ctx context.Context, deal *cid.Cid, root
 		offer = offers[0]
 	}
 
-	carFile, err := ioutil.TempFile(dh.t.TempDir(), "ret-car")
-	require.NoError(dh.t, err)
-
-	defer carFile.Close() //nolint:errcheck
+	carFile := dh.t.TempDir() + string(os.PathSeparator) + "ret-car-" + root.String()
 
 	caddr, err := dh.client.WalletDefaultAddress(ctx)
 	require.NoError(dh.t, err)
@@ -333,7 +338,9 @@ func (dh *DealHarness) PerformRetrieval(ctx context.Context, deal *cid.Cid, root
 	updates, err := dh.client.ClientGetRetrievalUpdates(updatesCtx)
 	require.NoError(dh.t, err)
 
-	retrievalRes, err := dh.client.ClientRetrieve(ctx, offer.Order(caddr))
+	order := makeOrder(offer, caddr)
+
+	retrievalRes, err := dh.client.ClientRetrieve(ctx, order)
 	require.NoError(dh.t, err)
 consumeEvents:
 	for {
@@ -359,22 +366,27 @@ consumeEvents:
 	}
 	cancel()
 
+	if order.RemoteStore != nil {
+		// if we're retrieving into a remote store, skip export
+		return ""
+	}
+
 	require.NoError(dh.t, dh.client.ClientExport(ctx,
 		api.ExportRef{
 			Root:   root,
 			DealID: retrievalRes.DealID,
 		},
 		api.FileRef{
-			Path:  carFile.Name(),
+			Path:  carFile,
 			IsCAR: carExport,
 		}))
 
-	ret := carFile.Name()
+	ret := carFile
 
 	return ret
 }
 
-func (dh *DealHarness) ExtractFileFromCAR(ctx context.Context, file *os.File) (out *os.File) {
+func (dh *DealHarness) ExtractFileFromCAR(ctx context.Context, file *os.File) string {
 	bserv := dstest.Bserv()
 	ch, err := car.LoadCar(ctx, bserv.Blockstore(), file)
 	require.NoError(dh.t, err)
@@ -389,12 +401,9 @@ func (dh *DealHarness) ExtractFileFromCAR(ctx context.Context, file *os.File) (o
 	fil, err := unixfile.NewUnixfsFile(ctx, dserv, nd)
 	require.NoError(dh.t, err)
 
-	tmpfile, err := ioutil.TempFile(dh.t.TempDir(), "file-in-car")
-	require.NoError(dh.t, err)
+	tmpfile := dh.t.TempDir() + string(os.PathSeparator) + "file-in-car" + b.Cid().String()
 
-	defer tmpfile.Close() //nolint:errcheck
-
-	err = files.WriteTo(fil, tmpfile.Name())
+	err = files.WriteTo(fil, tmpfile)
 	require.NoError(dh.t, err)
 
 	return tmpfile
@@ -450,7 +459,7 @@ func (dh *DealHarness) RunConcurrentDeals(opts RunConcurrentDealsOpts) {
 				actualFile := dh.ExtractFileFromCAR(ctx, f)
 				require.NoError(dh.t, f.Close())
 
-				AssertFilesEqual(dh.t, inPath, actualFile.Name())
+				AssertFilesEqual(dh.t, inPath, actualFile)
 			} else {
 				AssertFilesEqual(dh.t, inPath, outPath)
 			}

@@ -4,11 +4,10 @@ import (
 	"context"
 	"io"
 
-	"golang.org/x/xerrors"
-
 	blocks "github.com/ipfs/go-block-format"
-	cid "github.com/ipfs/go-cid"
+	"github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
+	"golang.org/x/xerrors"
 )
 
 var _ Blockstore = (*idstore)(nil)
@@ -101,6 +100,14 @@ func (b *idstore) Put(ctx context.Context, blk blocks.Block) error {
 	}
 
 	return b.bs.Put(ctx, blk)
+}
+
+func (b *idstore) ForEachKey(f func(cid.Cid) error) error {
+	iterBstore, ok := b.bs.(BlockstoreIterator)
+	if !ok {
+		return xerrors.Errorf("underlying blockstore (type %T) doesn't support fast iteration", b.bs)
+	}
+	return iterBstore.ForEachKey(f)
 }
 
 func (b *idstore) PutMany(ctx context.Context, blks []blocks.Block) error {

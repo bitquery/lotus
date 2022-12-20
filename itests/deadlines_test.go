@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -7,15 +7,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/builtin"
-	minertypes "github.com/filecoin-project/go-state-types/builtin/v8/miner"
+	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/builtin"
+	minertypes "github.com/filecoin-project/go-state-types/builtin/v8/miner"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/go-state-types/network"
+	miner2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -23,13 +28,9 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/extern/sector-storage/mock"
 	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/filecoin-project/lotus/node/impl"
-	miner2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
-	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	"github.com/stretchr/testify/require"
+	"github.com/filecoin-project/lotus/storage/sealer/mock"
 )
 
 // TestDeadlineToggling:
@@ -159,7 +160,7 @@ func TestDeadlineToggling(t *testing.T) {
 		build.Clock.Sleep(blocktime)
 	}
 
-	checkMiner := func(ma address.Address, power abi.StoragePower, active, activeIfCron bool, tsk types.TipSetKey) {
+	checkMiner := func(ma address.Address, power abi.StoragePower, active bool, tsk types.TipSetKey) {
 		//stm: @CHAIN_STATE_MINER_POWER_001
 		p, err := client.StateMinerPower(ctx, ma, tsk)
 		require.NoError(t, err)
@@ -177,21 +178,6 @@ func TestDeadlineToggling(t *testing.T) {
 		act, err := mst.DeadlineCronActive()
 		require.NoError(t, err)
 
-		if tsk != types.EmptyTSK {
-			ts, err := client.ChainGetTipSet(ctx, tsk)
-			require.NoError(t, err)
-			di, err := mst.DeadlineInfo(ts.Height())
-			require.NoError(t, err)
-
-			// cron happened on the same epoch some other condition would have happened
-			if di.Open == ts.Height() {
-				act, err := mst.DeadlineCronActive()
-				require.NoError(t, err)
-				require.Equal(t, activeIfCron, act)
-				return
-			}
-		}
-
 		require.Equal(t, active, act)
 	}
 
@@ -199,7 +185,7 @@ func TestDeadlineToggling(t *testing.T) {
 	{
 		uts, err := client.ChainGetTipSetByHeight(ctx, upgradeH+2, types.EmptyTSK)
 		require.NoError(t, err)
-		checkMiner(maddrB, types.NewInt(0), true, true, uts.Key())
+		checkMiner(maddrB, types.NewInt(0), true, uts.Key())
 	}
 
 	//stm: @CHAIN_STATE_NETWORK_VERSION_001
@@ -217,19 +203,19 @@ func TestDeadlineToggling(t *testing.T) {
 	require.NoError(t, err)
 
 	// first round of miner checks
-	checkMiner(maddrA, types.NewInt(uint64(ssz)*kit.DefaultPresealsPerBootstrapMiner), true, true, types.EmptyTSK)
-	checkMiner(maddrC, types.NewInt(uint64(ssz)*sectorsC), true, true, types.EmptyTSK)
+	checkMiner(maddrA, types.NewInt(uint64(ssz)*kit.DefaultPresealsPerBootstrapMiner), true, types.EmptyTSK)
+	checkMiner(maddrC, types.NewInt(uint64(ssz)*sectorsC), true, types.EmptyTSK)
 
-	checkMiner(maddrB, types.NewInt(0), false, false, types.EmptyTSK)
-	checkMiner(maddrD, types.NewInt(0), false, false, types.EmptyTSK)
-	checkMiner(maddrE, types.NewInt(0), false, false, types.EmptyTSK)
+	checkMiner(maddrB, types.NewInt(0), false, types.EmptyTSK)
+	checkMiner(maddrD, types.NewInt(0), false, types.EmptyTSK)
+	checkMiner(maddrE, types.NewInt(0), false, types.EmptyTSK)
 
 	// pledge sectors on minerB/minerD, stop post on minerC
 	minerB.PledgeSectors(ctx, sectorsB, 0, nil)
-	checkMiner(maddrB, types.NewInt(0), true, true, types.EmptyTSK)
+	checkMiner(maddrB, types.NewInt(0), true, types.EmptyTSK)
 
 	minerD.PledgeSectors(ctx, sectorsD, 0, nil)
-	checkMiner(maddrD, types.NewInt(0), true, true, types.EmptyTSK)
+	checkMiner(maddrD, types.NewInt(0), true, types.EmptyTSK)
 
 	minerC.StorageMiner.(*impl.StorageMinerAPI).IStorageMgr.(*mock.SectorMgr).Fail()
 
@@ -280,7 +266,7 @@ func TestDeadlineToggling(t *testing.T) {
 		build.Clock.Sleep(blocktime)
 	}
 
-	checkMiner(maddrE, types.NewInt(0), true, true, types.EmptyTSK)
+	checkMiner(maddrE, types.NewInt(0), true, types.EmptyTSK)
 
 	// go through rest of the PP
 	for {
@@ -295,11 +281,11 @@ func TestDeadlineToggling(t *testing.T) {
 	}
 
 	// second round of miner checks
-	checkMiner(maddrA, types.NewInt(uint64(ssz)*kit.DefaultPresealsPerBootstrapMiner), true, true, types.EmptyTSK)
-	checkMiner(maddrC, types.NewInt(0), true, true, types.EmptyTSK)
-	checkMiner(maddrB, types.NewInt(uint64(ssz)*sectorsB), true, true, types.EmptyTSK)
-	checkMiner(maddrD, types.NewInt(uint64(ssz)*sectorsD), true, true, types.EmptyTSK)
-	checkMiner(maddrE, types.NewInt(0), false, false, types.EmptyTSK)
+	checkMiner(maddrA, types.NewInt(uint64(ssz)*kit.DefaultPresealsPerBootstrapMiner), true, types.EmptyTSK)
+	checkMiner(maddrC, types.NewInt(0), true, types.EmptyTSK)
+	checkMiner(maddrB, types.NewInt(uint64(ssz)*sectorsB), true, types.EmptyTSK)
+	checkMiner(maddrD, types.NewInt(uint64(ssz)*sectorsD), true, types.EmptyTSK)
+	checkMiner(maddrE, types.NewInt(0), false, types.EmptyTSK)
 
 	// disable post on minerB
 	minerB.StorageMiner.(*impl.StorageMinerAPI).IStorageMgr.(*mock.SectorMgr).Fail()
@@ -307,7 +293,7 @@ func TestDeadlineToggling(t *testing.T) {
 	// terminate sectors on minerD
 	{
 		var terminationDeclarationParams []miner2.TerminationDeclaration
-		secs, err := minerD.SectorsList(ctx)
+		secs, err := minerD.SectorsListNonGenesis(ctx)
 		require.NoError(t, err)
 		require.Len(t, secs, sectorsD)
 
@@ -352,8 +338,10 @@ func TestDeadlineToggling(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, exitcode.Ok, r.Receipt.ExitCode)
 
-		// assert inactive if the message landed in the tipset we run cron in
-		checkMiner(maddrD, types.NewInt(0), true, false, r.TipSet)
+		// assert miner has no power
+		p, err := client.StateMinerPower(ctx, maddrD, r.TipSet)
+		require.NoError(t, err)
+		require.True(t, p.MinerPower.RawBytePower.IsZero())
 	}
 
 	// go through another PP
@@ -368,8 +356,8 @@ func TestDeadlineToggling(t *testing.T) {
 		build.Clock.Sleep(blocktime)
 	}
 
-	checkMiner(maddrA, types.NewInt(uint64(ssz)*kit.DefaultPresealsPerBootstrapMiner), true, true, types.EmptyTSK)
-	checkMiner(maddrC, types.NewInt(0), true, true, types.EmptyTSK)
-	checkMiner(maddrB, types.NewInt(0), true, true, types.EmptyTSK)
-	checkMiner(maddrD, types.NewInt(0), false, false, types.EmptyTSK)
+	checkMiner(maddrA, types.NewInt(uint64(ssz)*kit.DefaultPresealsPerBootstrapMiner), true, types.EmptyTSK)
+	checkMiner(maddrC, types.NewInt(0), true, types.EmptyTSK)
+	checkMiner(maddrB, types.NewInt(0), true, types.EmptyTSK)
+	checkMiner(maddrD, types.NewInt(0), false, types.EmptyTSK)
 }

@@ -2,9 +2,10 @@ package full
 
 import (
 	"context"
+	"os"
 	"sync/atomic"
 
-	cid "github.com/ipfs/go-cid"
+	"github.com/ipfs/go-cid"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
@@ -56,7 +57,7 @@ func (a *SyncAPI) SyncSubmitBlock(ctx context.Context, blk *types.BlockMsg) erro
 		return xerrors.Errorf("loading parent block: %w", err)
 	}
 
-	if a.SlashFilter != nil {
+	if a.SlashFilter != nil && os.Getenv("LOTUS_NO_SLASHFILTER") != "_yes_i_know_i_can_and_probably_will_lose_all_my_fil_and_power_" {
 		if err := a.SlashFilter.MinedBlock(ctx, blk.Header, parent.Height); err != nil {
 			log.Errorf("<!!> SLASH FILTER ERROR: %s", err)
 			return xerrors.Errorf("<!!> SLASH FILTER ERROR: %w", err)

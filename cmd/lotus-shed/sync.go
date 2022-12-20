@@ -4,19 +4,16 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/ipfs/go-cid"
+	"github.com/urfave/cli/v2"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
-
-	"github.com/filecoin-project/go-address"
-
-	"github.com/filecoin-project/go-state-types/abi"
-
-	"github.com/ipfs/go-cid"
-
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
-	"github.com/urfave/cli/v2"
 )
 
 var syncCmd = &cli.Command{
@@ -41,10 +38,8 @@ var syncValidateCmd = &cli.Command{
 		defer closer()
 		ctx := lcli.ReqContext(cctx)
 
-		if cctx.Args().Len() < 1 {
-			fmt.Println("usage: <blockCid1> <blockCid2>...")
-			fmt.Println("At least one block cid must be provided")
-			return nil
+		if cctx.NArg() < 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("at least one block cid must be provided"))
 		}
 
 		args := cctx.Args().Slice()
@@ -78,7 +73,7 @@ var syncScrapePowerCmd = &cli.Command{
 	Usage:     "given a height and a tipset, reports what percentage of mining power had a winning ticket between the tipset and height",
 	ArgsUsage: "[height tipsetkey]",
 	Action: func(cctx *cli.Context) error {
-		if cctx.Args().Len() < 1 {
+		if cctx.NArg() < 1 {
 			fmt.Println("usage: <height> [blockCid1 blockCid2...]")
 			fmt.Println("Any CIDs passed after the height will be used as the tipset key")
 			fmt.Println("If no block CIDs are provided, chain head will be used")
@@ -93,10 +88,8 @@ var syncScrapePowerCmd = &cli.Command{
 		defer closer()
 		ctx := lcli.ReqContext(cctx)
 
-		if cctx.Args().Len() < 1 {
-			fmt.Println("usage: <blockCid1> <blockCid2>...")
-			fmt.Println("At least one block cid must be provided")
-			return nil
+		if cctx.NArg() < 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("at least one block cid must be provided"))
 		}
 
 		h, err := strconv.ParseInt(cctx.Args().Get(0), 10, 0)

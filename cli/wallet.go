@@ -10,10 +10,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/filecoin-project/go-state-types/network"
-
-	"github.com/filecoin-project/lotus/build"
-
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
@@ -21,7 +17,9 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/go-state-types/network"
 
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/lib/tablewriter"
 )
@@ -262,6 +260,7 @@ var walletSetDefault = &cli.Command{
 			return err
 		}
 
+		fmt.Println("Default address set to:", addr)
 		return api.WalletSetDefault(ctx, addr)
 	},
 }
@@ -519,6 +518,8 @@ var walletDelete = &cli.Command{
 			return err
 		}
 
+		fmt.Println("Soft deleting address:", addr)
+		fmt.Println("Hard deletion of the address in `~/.lotus/keystore` is needed for permanent removal")
 		return api.WalletDelete(ctx, addr)
 	},
 }
@@ -647,7 +648,7 @@ var walletMarketWithdraw = &cli.Command{
 		}
 
 		// check it executed successfully
-		if wait.Receipt.ExitCode != 0 {
+		if wait.Receipt.ExitCode.IsError() {
 			afmt.Println(cctx.App.Writer, "withdrawal failed!")
 			return err
 		}

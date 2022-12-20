@@ -1,9 +1,9 @@
 package config
 
 import (
-	"github.com/filecoin-project/lotus/chain/types"
-	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
 	"github.com/ipfs/go-cid"
+
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 // // NOTE: ONLY PUT STRUCT DEFINITIONS IN THIS FILE
@@ -26,6 +26,7 @@ type FullNode struct {
 	Wallet     Wallet
 	Fees       FeeConfig
 	Chainstore Chainstore
+	Cluster    UserRaftConfig
 }
 
 // // Common
@@ -157,10 +158,10 @@ type DealmakingConfig struct {
 	StartEpochSealingBuffer uint64
 
 	// A command used for fine-grained evaluation of storage deals
-	// see https://docs.filecoin.io/mine/lotus/miner-configuration/#using-filters-for-fine-grained-storage-and-retrieval-deal-acceptance for more details
+	// see https://lotus.filecoin.io/storage-providers/advanced-configurations/market/#using-filters-for-fine-grained-storage-and-retrieval-deal-acceptance for more details
 	Filter string
 	// A command used for fine-grained evaluation of retrieval deals
-	// see https://docs.filecoin.io/mine/lotus/miner-configuration/#using-filters-for-fine-grained-storage-and-retrieval-deal-acceptance for more details
+	// see https://lotus.filecoin.io/storage-providers/advanced-configurations/market/#using-filters-for-fine-grained-storage-and-retrieval-deal-acceptance for more details
 	RetrievalFilter string
 
 	RetrievalPricing *RetrievalPricing
@@ -220,9 +221,104 @@ type RetrievalPricingDefault struct {
 
 type ProvingConfig struct {
 	// Maximum number of sector checks to run in parallel. (0 = unlimited)
+	//
+	// WARNING: Setting this value too high may make the node crash by running out of stack
+	// WARNING: Setting this value too low may make sector challenge reading much slower, resulting in failed PoSt due
+	// to late submission.
+	//
+	// After changing this option, confirm that the new value works in your setup by invoking
+	// 'lotus-miner proving compute window-post 0'
 	ParallelCheckLimit int
 
-	// todo disable builtin post
+	// Maximum amount of time a proving pre-check can take for a sector. If the check times out the sector will be skipped
+	//
+	// WARNING: Setting this value too low risks in sectors being skipped even though they are accessible, just reading the
+	// test challenge took longer than this timeout
+	// WARNING: Setting this value too high risks missing PoSt deadline in case IO operations related to this sector are
+	// blocked (e.g. in case of disconnected NFS mount)
+	SingleCheckTimeout Duration
+
+	// Maximum amount of time a proving pre-check can take for an entire partition. If the check times out, sectors in
+	// the partition which didn't get checked on time will be skipped
+	//
+	// WARNING: Setting this value too low risks in sectors being skipped even though they are accessible, just reading the
+	// test challenge took longer than this timeout
+	// WARNING: Setting this value too high risks missing PoSt deadline in case IO operations related to this partition are
+	// blocked or slow
+	PartitionCheckTimeout Duration
+
+	// Disable Window PoSt computation on the lotus-miner process even if no window PoSt workers are present.
+	//
+	// WARNING: If no windowPoSt workers are connected, window PoSt WILL FAIL resulting in faulty sectors which will need
+	// to be recovered. Before enabling this option, make sure your PoSt workers work correctly.
+	//
+	// After changing this option, confirm that the new value works in your setup by invoking
+	// 'lotus-miner proving compute window-post 0'
+	DisableBuiltinWindowPoSt bool
+
+	// Disable Winning PoSt computation on the lotus-miner process even if no winning PoSt workers are present.
+	//
+	// WARNING: If no WinningPoSt workers are connected, Winning PoSt WILL FAIL resulting in lost block rewards.
+	// Before enabling this option, make sure your PoSt workers work correctly.
+	DisableBuiltinWinningPoSt bool
+
+	// Disable WindowPoSt provable sector readability checks.
+	//
+	// In normal operation, when preparing to compute WindowPoSt, lotus-miner will perform a round of reading challenges
+	// from all sectors to confirm that those sectors can be proven. Challenges read in this process are discarded, as
+	// we're only interested in checking that sector data can be read.
+	//
+	// When using builtin proof computation (no PoSt workers, and DisableBuiltinWindowPoSt is set to false), this process
+	// can save a lot of time and compute resources in the case that some sectors are not readable - this is caused by
+	// the builtin logic not skipping snark computation when some sectors need to be skipped.
+	//
+	// When using PoSt workers, this process is mostly redundant, with PoSt workers challenges will be read once, and
+	// if challenges for some sectors aren't readable, those sectors will just get skipped.
+	//
+	// Disabling sector pre-checks will slightly reduce IO load when proving sectors, possibly resulting in shorter
+	// time to produce window PoSt. In setups with good IO capabilities the effect of this option on proving time should
+	// be negligible.
+	//
+	// NOTE: It likely is a bad idea to disable sector pre-checks in setups with no PoSt workers.
+	//
+	// NOTE: Even when this option is enabled, recovering sectors will be checked before recovery declaration message is
+	// sent to the chain
+	//
+	// After changing this option, confirm that the new value works in your setup by invoking
+	// 'lotus-miner proving compute window-post 0'
+	DisableWDPoStPreChecks bool
+
+	// Maximum number of partitions to prove in a single SubmitWindowPoSt messace. 0 = network limit (10 in nv16)
+	//
+	// A single partition may contain up to 2349 32GiB sectors, or 2300 64GiB sectors.
+	//
+	// The maximum number of sectors which can be proven in a single PoSt message is 25000 in network version 16, which
+	// means that a single message can prove at most 10 partitions
+	//
+	// Note that setting this value lower may result in less efficient gas use - more messages will be sent,
+	// to prove each deadline, resulting in more total gas use (but each message will have lower gas limit)
+	//
+	// Setting this value above the network limit has no effect
+	MaxPartitionsPerPoStMessage int
+
+	// Maximum number of partitions to declare in a single DeclareFaultsRecovered message. 0 = no limit.
+
+	// In some cases when submitting DeclareFaultsRecovered messages,
+	// there may be too many recoveries to fit in a BlockGasLimit.
+	// In those cases it may be necessary to set this value to something low (eg 1);
+	// Note that setting this value lower may result in less efficient gas use - more messages will be sent than needed,
+	// resulting in more total gas use (but each message will have lower gas limit)
+	MaxPartitionsPerRecoveryMessage int
+
+	// Enable single partition per PoSt Message for partitions containing recovery sectors
+	//
+	// In cases when submitting PoSt messages which contain recovering sectors, the default network limit may still be
+	// too high to fit in the block gas limit. In those cases, it becomes useful to only house the single partition
+	// with recovering sectors in the post message
+	//
+	// Note that setting this value lower may result in less efficient gas use - more messages will be sent,
+	// to prove each deadline, resulting in more total gas use (but each message will have lower gas limit)
+	SingleRecoveringPartitionPerPostMessage bool
 }
 
 type SealingConfig struct {
@@ -247,6 +343,24 @@ type SealingConfig struct {
 
 	// Upper bound on how many sectors can be sealing+upgrading at the same time when upgrading CC sectors with deals (0 = MaxSealingSectorsForDeals)
 	MaxUpgradingSectors uint64
+
+	// When set to a non-zero value, minimum number of epochs until sector expiration required for sectors to be considered
+	// for upgrades (0 = DealMinDuration = 180 days = 518400 epochs)
+	//
+	// Note that if all deals waiting in the input queue have lifetimes longer than this value, upgrade sectors will be
+	// required to have expiration of at least the soonest-ending deal
+	MinUpgradeSectorExpiration uint64
+
+	// When set to a non-zero value, minimum number of epochs until sector expiration above which upgrade candidates will
+	// be selected based on lowest initial pledge.
+	//
+	// Target sector expiration is calculated by looking at the input deal queue, sorting it by deal expiration, and
+	// selecting N deals from the queue up to sector size. The target expiration will be Nth deal end epoch, or in case
+	// where there weren't enough deals to fill a sector, DealMaxDuration (540 days = 1555200 epochs)
+	//
+	// Setting this to a high value (for example to maximum deal duration - 1555200) will disable selection based on
+	// initial pledge - upgrade sectors will always be chosen based on longest expiration
+	MinTargetUpgradeSectorExpiration uint64
 
 	// CommittedCapacitySectorLifetime is the duration a Committed Capacity (CC) sector will
 	// live before it must be extended or converted into sector containing deals before it is
@@ -290,8 +404,9 @@ type SealingConfig struct {
 
 	// enable / disable commit aggregation (takes effect after nv13)
 	AggregateCommits bool
-	// maximum batched commit size - batches will be sent immediately above this size
+	// minimum batched commit size - batches above this size will eventually be sent on a timeout
 	MinCommitBatch int
+	// maximum batched commit size - batches will be sent immediately above this size
 	MaxCommitBatch int
 	// how long to wait before submitting a batch after crossing the minimum batch size
 	CommitBatchWait Duration
@@ -319,7 +434,7 @@ type SealingConfig struct {
 type SealerConfig struct {
 	ParallelFetchLimit int
 
-	// Local worker config
+	AllowSectorDownload      bool
 	AllowAddPiece            bool
 	AllowPreCommit1          bool
 	AllowPreCommit2          bool
@@ -329,10 +444,32 @@ type SealerConfig struct {
 	AllowProveReplicaUpdate2 bool
 	AllowRegenSectorKey      bool
 
+	// LocalWorkerName specifies a custom name for the builtin worker.
+	// If set to an empty string (default) os hostname will be used
+	LocalWorkerName string
+
+	// Assigner specifies the worker assigner to use when scheduling tasks.
+	// "utilization" (default) - assign tasks to workers with lowest utilization.
+	// "spread" - assign tasks to as many distinct workers as possible.
+	Assigner string
+
+	// DisallowRemoteFinalize when set to true will force all Finalize tasks to
+	// run on workers with local access to both long-term storage and the sealing
+	// path containing the sector.
+	// --
+	// WARNING: Only set this if all workers have access to long-term storage
+	// paths. If this flag is enabled, and there are workers without long-term
+	// storage access, sectors will not be moved from them, and Finalize tasks
+	// will appear to be stuck.
+	// --
+	// If you see stuck Finalize tasks after enabling this setting, check
+	// 'lotus-miner sealing sched-diag' and 'lotus-miner storage find [sector num]'
+	DisallowRemoteFinalize bool
+
 	// ResourceFiltering instructs the system which resource filtering strategy
 	// to use when evaluating tasks against this worker. An empty value defaults
 	// to "hardware".
-	ResourceFiltering sectorstorage.ResourceFilteringStrategy
+	ResourceFiltering ResourceFilteringStrategy
 }
 
 type BatchFeeConfig struct {
@@ -435,7 +572,7 @@ type Chainstore struct {
 
 type Splitstore struct {
 	// ColdStoreType specifies the type of the coldstore.
-	// It can be "universal" (default) or "discard" for discarding cold blocks.
+	// It can be "messages" (default) to store only messages, "universal" to store all chain state or "discard" for discarding cold blocks.
 	ColdStoreType string
 	// HotStoreType specifies the type of the hotstore.
 	// Only currently supported value is "badger".
@@ -480,4 +617,31 @@ type Wallet struct {
 
 type FeeConfig struct {
 	DefaultMaxFee types.FIL
+}
+
+type UserRaftConfig struct {
+	// EXPERIMENTAL. config to enabled node cluster with raft consensus
+	ClusterModeEnabled bool
+	// A folder to store Raft's data.
+	DataFolder string
+	// InitPeersetMultiAddr provides the list of initial cluster peers for new Raft
+	// peers (with no prior state). It is ignored when Raft was already
+	// initialized or when starting in staging mode.
+	InitPeersetMultiAddr []string
+	// LeaderTimeout specifies how long to wait for a leader before
+	// failing an operation.
+	WaitForLeaderTimeout Duration
+	// NetworkTimeout specifies how long before a Raft network
+	// operation is timed out
+	NetworkTimeout Duration
+	// CommitRetries specifies how many times we retry a failed commit until
+	// we give up.
+	CommitRetries int
+	// How long to wait between retries
+	CommitRetryDelay Duration
+	// BackupsRotate specifies the maximum number of Raft's DataFolder
+	// copies that we keep as backups (renaming) after cleanup.
+	BackupsRotate int
+	// Tracing enables propagation of contexts across binary boundaries.
+	Tracing bool
 }

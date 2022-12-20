@@ -17,17 +17,18 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/network"
+	runtime7 "github.com/filecoin-project/specs-actors/v7/actors/runtime"
+	proof7 "github.com/filecoin-project/specs-actors/v7/actors/runtime/proof"
+
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/lib/sigs"
-
-	runtime7 "github.com/filecoin-project/specs-actors/v7/actors/runtime"
-	proof7 "github.com/filecoin-project/specs-actors/v7/actors/runtime/proof"
+	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 func init() {
@@ -38,7 +39,7 @@ func init() {
 
 type SyscallBuilder func(ctx context.Context, rt *Runtime) runtime7.Syscalls
 
-func Syscalls(verifier ffiwrapper.Verifier) SyscallBuilder {
+func Syscalls(verifier storiface.Verifier) SyscallBuilder {
 	return func(ctx context.Context, rt *Runtime) runtime7.Syscalls {
 
 		return &syscallShim{
@@ -65,7 +66,7 @@ type syscallShim struct {
 	actor          address.Address
 	cstate         *state.StateTree
 	cst            cbor.IpldStore
-	verifier       ffiwrapper.Verifier
+	verifier       storiface.Verifier
 }
 
 func (ss *syscallShim) ComputeUnsealedSectorCID(st abi.RegisteredSealProof, pieces []abi.PieceInfo) (cid.Cid, error) {
@@ -104,8 +105,18 @@ func (ss *syscallShim) VerifyConsensusFault(a, b, extra []byte) (*runtime7.Conse
 		return nil, xerrors.Errorf("cannot decode first block header: %w", decodeErr)
 	}
 
+	// A _valid_ block must use an ID address, but that's not what we're checking here. We're
+	// just making sure that adding additional address protocols won't lead to consensus issues.
+	if !abi.AddressValidForNetworkVersion(blockA.Miner, ss.networkVersion) {
+		return nil, xerrors.Errorf("address protocol unsupported in current network version: %d", blockA.Miner.Protocol())
+	}
+
 	if decodeErr := blockB.UnmarshalCBOR(bytes.NewReader(b)); decodeErr != nil {
 		return nil, xerrors.Errorf("cannot decode second block header: %f", decodeErr)
+	}
+
+	if !abi.AddressValidForNetworkVersion(blockB.Miner, ss.networkVersion) {
+		return nil, xerrors.Errorf("address protocol unsupported in current network version: %d", blockB.Miner.Protocol())
 	}
 
 	// workaround chain halt
@@ -167,6 +178,10 @@ func (ss *syscallShim) VerifyConsensusFault(a, b, extra []byte) (*runtime7.Conse
 	if len(extra) > 0 {
 		if decodeErr := blockC.UnmarshalCBOR(bytes.NewReader(extra)); decodeErr != nil {
 			return nil, xerrors.Errorf("cannot decode extra: %w", decodeErr)
+		}
+
+		if !abi.AddressValidForNetworkVersion(blockC.Miner, ss.networkVersion) {
+			return nil, xerrors.Errorf("address protocol unsupported in current network version: %d", blockC.Miner.Protocol())
 		}
 
 		if types.CidArrsEqual(blockA.Parents, blockC.Parents) && blockA.Height == blockC.Height &&

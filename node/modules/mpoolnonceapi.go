@@ -7,12 +7,11 @@ import (
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/lotus/node/impl/full"
-
-	"github.com/filecoin-project/lotus/chain/messagesigner"
-	"github.com/filecoin-project/lotus/chain/types"
-
 	"github.com/filecoin-project/go-address"
+
+	"github.com/filecoin-project/lotus/chain/messagepool"
+	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/node/impl/full"
 )
 
 // MpoolNonceAPI substitutes the mpool nonce with an implementation that
@@ -105,4 +104,4 @@ func (a *MpoolNonceAPI) GetActor(ctx context.Context, addr address.Address, tsk 
 	return act, nil
 }
 
-var _ messagesigner.MpoolNonceAPI = (*MpoolNonceAPI)(nil)
+var _ messagepool.MpoolNonceAPI = (*MpoolNonceAPI)(nil)

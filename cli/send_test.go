@@ -1,18 +1,20 @@
-//stm: ignore
-//stm: #unit
+// stm: ignore
+// stm: #unit
 package cli
 
 import (
 	"bytes"
 	"testing"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/api"
-	types "github.com/filecoin-project/lotus/chain/types"
-	gomock "github.com/golang/mock/gomock"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	ucli "github.com/urfave/cli/v2"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+
+	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func mustAddr(a address.Address, err error) address.Address {

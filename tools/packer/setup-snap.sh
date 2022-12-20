@@ -23,17 +23,13 @@ MANAGED_FILES=(
 )
 
 # this is required on digitalocean, which does not have snap seeded correctly at this phase.
-apt update
-apt reinstall snapd
+apt-get -y -o DPkg::Lock::Timeout=3 update \
+  && apt-get -y -o DPkg::Lock::Timeout=3 reinstall snapd
 
-snap install lotus-filecoin
+snap install lotus
 
-snap alias lotus-filecoin.lotus lotus
-snap alias lotus-file.con.lotus-daemon lotus-daemon
-snap alias lotus-filecoin.lotus-miner lotus-miner
-snap alias lotus-filecoin.lotus-worker lotus-worker
-
-snap stop lotus-filecoin.lotus-daemon
+snap alias lotus.lotus-miner lotus-miner
+snap alias lotus.lotus-worker lotus-worker
 
 # Setup firewall
 yes | ufw enable

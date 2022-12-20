@@ -5,21 +5,22 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-graphsync"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	ma "github.com/multiformats/go-multiaddr"
+
 	"github.com/filecoin-project/go-address"
-
-	"github.com/libp2p/go-libp2p-core/network"
-
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/builtin/v9/miner"
+
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
-	"github.com/ipfs/go-cid"
-	"github.com/ipfs/go-graphsync"
-
-	"github.com/libp2p/go-libp2p-core/peer"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	ma "github.com/multiformats/go-multiaddr"
 )
 
 type MultiaddrSlice []ma.Multiaddr
@@ -54,7 +55,13 @@ type PubsubScore struct {
 }
 
 type MessageSendSpec struct {
-	MaxFee abi.TokenAmount
+	MaxFee  abi.TokenAmount
+	MsgUuid uuid.UUID
+}
+
+type MpoolMessageWhole struct {
+	Msg  *types.Message
+	Spec *MessageSendSpec
 }
 
 // GraphSyncDataTransfer provides diagnostics on a data transfer happening over graphsync
@@ -135,13 +142,7 @@ type NetStat struct {
 }
 
 type NetLimit struct {
-	Dynamic bool `json:",omitempty"`
-	// set if Dynamic is false
 	Memory int64 `json:",omitempty"`
-	// set if Dynamic is true
-	MemoryFraction float64 `json:",omitempty"`
-	MinMemory      int64   `json:",omitempty"`
-	MaxMemory      int64   `json:",omitempty"`
 
 	Streams, StreamsInbound, StreamsOutbound int
 	Conns, ConnsInbound, ConnsOutbound       int
@@ -253,10 +254,10 @@ type RestrievalRes struct {
 }
 
 // Selector specifies ipld selector string
-// - if the string starts with '{', it's interpreted as json selector string
-//   see https://ipld.io/specs/selectors/ and https://ipld.io/specs/selectors/fixtures/selector-fixtures-1/
-// - otherwise the string is interpreted as ipld-selector-text-lite (simple ipld path)
-//   see https://github.com/ipld/go-ipld-selector-text-lite
+//   - if the string starts with '{', it's interpreted as json selector string
+//     see https://ipld.io/specs/selectors/ and https://ipld.io/specs/selectors/fixtures/selector-fixtures-1/
+//   - otherwise the string is interpreted as ipld-selector-text-lite (simple ipld path)
+//     see https://github.com/ipld/go-ipld-selector-text-lite
 type Selector string
 
 type DagSpec struct {
@@ -300,6 +301,9 @@ type MinerInfo struct {
 	SectorSize                 abi.SectorSize
 	WindowPoStPartitionSectors uint64
 	ConsensusFaultElapsed      abi.ChainEpoch
+	Beneficiary                address.Address
+	BeneficiaryTerm            *miner.BeneficiaryTerm
+	PendingBeneficiaryTerm     *miner.PendingBeneficiaryChange
 }
 
 type NetworkParams struct {
@@ -332,4 +336,64 @@ type ForkUpgradeParams struct {
 	UpgradeHyperdriveHeight    abi.ChainEpoch
 	UpgradeChocolateHeight     abi.ChainEpoch
 	UpgradeOhSnapHeight        abi.ChainEpoch
+	UpgradeSkyrHeight          abi.ChainEpoch
+	UpgradeSharkHeight         abi.ChainEpoch
+}
+
+type NonceMapType map[address.Address]uint64
+type MsgUuidMapType map[uuid.UUID]*types.SignedMessage
+
+type RaftStateData struct {
+	NonceMap NonceMapType
+	MsgUuids MsgUuidMapType
+}
+
+func (n *NonceMapType) MarshalJSON() ([]byte, error) {
+	marshalled := make(map[string]uint64)
+	for a, n := range *n {
+		marshalled[a.String()] = n
+	}
+	return json.Marshal(marshalled)
+}
+
+func (n *NonceMapType) UnmarshalJSON(b []byte) error {
+	unmarshalled := make(map[string]uint64)
+	err := json.Unmarshal(b, &unmarshalled)
+	if err != nil {
+		return err
+	}
+	*n = make(map[address.Address]uint64)
+	for saddr, nonce := range unmarshalled {
+		a, err := address.NewFromString(saddr)
+		if err != nil {
+			return err
+		}
+		(*n)[a] = nonce
+	}
+	return nil
+}
+
+func (m *MsgUuidMapType) MarshalJSON() ([]byte, error) {
+	marshalled := make(map[string]*types.SignedMessage)
+	for u, msg := range *m {
+		marshalled[u.String()] = msg
+	}
+	return json.Marshal(marshalled)
+}
+
+func (m *MsgUuidMapType) UnmarshalJSON(b []byte) error {
+	unmarshalled := make(map[string]*types.SignedMessage)
+	err := json.Unmarshal(b, &unmarshalled)
+	if err != nil {
+		return err
+	}
+	*m = make(map[uuid.UUID]*types.SignedMessage)
+	for suid, msg := range unmarshalled {
+		u, err := uuid.Parse(suid)
+		if err != nil {
+			return err
+		}
+		(*m)[u] = msg
+	}
+	return nil
 }

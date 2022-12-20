@@ -19,6 +19,7 @@ var dagstoreCmd = &cli.Command{
 	Usage: "Manage the dagstore on the markets subsystem",
 	Subcommands: []*cli.Command{
 		dagstoreListShardsCmd,
+		dagstoreRegisterShardCmd,
 		dagstoreInitializeShardCmd,
 		dagstoreRecoverShardCmd,
 		dagstoreInitializeAllCmd,
@@ -59,6 +60,45 @@ var dagstoreListShardsCmd = &cli.Command{
 	},
 }
 
+var dagstoreRegisterShardCmd = &cli.Command{
+	Name:      "register-shard",
+	ArgsUsage: "[key]",
+	Usage:     "Register a shard",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:        "color",
+			Usage:       "use color in display output",
+			DefaultText: "depends on output being a TTY",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		if cctx.IsSet("color") {
+			color.NoColor = !cctx.Bool("color")
+		}
+
+		if cctx.NArg() != 1 {
+			return lcli.IncorrectNumArgs(cctx)
+		}
+
+		marketsAPI, closer, err := lcli.GetMarketsAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		shardKey := cctx.Args().First()
+		err = marketsAPI.DagstoreRegisterShard(ctx, shardKey)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Registered shard " + shardKey)
+		return nil
+	},
+}
+
 var dagstoreInitializeShardCmd = &cli.Command{
 	Name:      "initialize-shard",
 	ArgsUsage: "[key]",
@@ -76,7 +116,7 @@ var dagstoreInitializeShardCmd = &cli.Command{
 		}
 
 		if cctx.NArg() != 1 {
-			return fmt.Errorf("must provide a single shard key")
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		marketsApi, closer, err := lcli.GetMarketsAPI(cctx)
@@ -108,7 +148,7 @@ var dagstoreRecoverShardCmd = &cli.Command{
 		}
 
 		if cctx.NArg() != 1 {
-			return fmt.Errorf("must provide a single shard key")
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		marketsApi, closer, err := lcli.GetMarketsAPI(cctx)
@@ -290,7 +330,7 @@ var dagstoreLookupPiecesCmd = &cli.Command{
 		}
 
 		if cctx.NArg() != 1 {
-			return fmt.Errorf("must provide a CID")
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		cidStr := cctx.Args().First()

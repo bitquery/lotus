@@ -6,26 +6,26 @@ import (
 	"fmt"
 	"time"
 
-	abinetwork "github.com/filecoin-project/go-state-types/network"
-
+	"github.com/google/uuid"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-state-types/crypto"
-	"github.com/filecoin-project/go-state-types/dline"
-
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
-
-	"github.com/filecoin-project/go-state-types/builtin/v8/market"
-	"github.com/filecoin-project/go-state-types/builtin/v8/miner"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/builtin/v8/paych"
+	"github.com/filecoin-project/go-state-types/builtin/v9/market"
+	"github.com/filecoin-project/go-state-types/builtin/v9/miner"
+	verifregtypes "github.com/filecoin-project/go-state-types/builtin/v9/verifreg"
+	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/go-state-types/dline"
+	abinetwork "github.com/filecoin-project/go-state-types/network"
+
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	lminer "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
@@ -170,6 +170,10 @@ type FullNode interface {
 	// state trees.
 	// If oldmsgskip is set, messages from before the requested roots are also not included.
 	ChainExport(ctx context.Context, nroots abi.ChainEpoch, oldmsgskip bool, tsk types.TipSetKey) (<-chan []byte, error) //perm:read
+
+	// ChainPrune prunes the stored chain state and garbage collects; only supported if you
+	// are using the splitstore
+	ChainPrune(ctx context.Context, opts PruneOpts) error //perm:admin
 
 	// ChainCheckBlockstore performs an (asynchronous) health check on the chain/state blockstore
 	// if supported by the underlying implementation.
@@ -406,7 +410,7 @@ type FullNode interface {
 
 	// StateReplay replays a given message, assuming it was included in a block in the specified tipset.
 	//
-	// If a tipset key is provided, and a replacing message is found on chain,
+	// If a tipset key is provided, and a replacing message is not found on chain,
 	// the method will return an error saying that the message wasn't found
 	//
 	// If no tipset key is provided, the appropriate tipset is looked up, and if
@@ -467,10 +471,15 @@ type FullNode interface {
 	StateMinerInitialPledgeCollateral(context.Context, address.Address, miner.SectorPreCommitInfo, types.TipSetKey) (types.BigInt, error) //perm:read
 	// StateMinerAvailableBalance returns the portion of a miner's balance that can be withdrawn or spent
 	StateMinerAvailableBalance(context.Context, address.Address, types.TipSetKey) (types.BigInt, error) //perm:read
-	// StateMinerSectorAllocated checks if a sector is allocated
+	// StateMinerSectorAllocated checks if a sector number is marked as allocated.
 	StateMinerSectorAllocated(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (bool, error) //perm:read
-	// StateSectorPreCommitInfo returns the PreCommit info for the specified miner's sector
-	StateSectorPreCommitInfo(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (miner.SectorPreCommitOnChainInfo, error) //perm:read
+	// StateSectorPreCommitInfo returns the PreCommit info for the specified miner's sector.
+	// Returns nil and no error if the sector isn't precommitted.
+	//
+	// Note that the sector number may be allocated while PreCommitInfo is nil. This means that either allocated sector
+	// numbers were compacted, and the sector number was marked as allocated in order to reduce size of the allocated
+	// sectors bitfield, or that the sector was precommitted, but the precommit has expired.
+	StateSectorPreCommitInfo(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (*miner.SectorPreCommitOnChainInfo, error) //perm:read
 	// StateSectorGetInfo returns the on-chain info for the specified miner's sector. Returns null in case the sector info isn't found
 	// NOTE: returned info.Expiration may not be accurate in some cases, use StateSectorExpiration to get accurate
 	// expiration epoch
@@ -527,6 +536,19 @@ type FullNode interface {
 	StateMarketDeals(context.Context, types.TipSetKey) (map[string]*MarketDeal, error) //perm:read
 	// StateMarketStorageDeal returns information about the indicated deal
 	StateMarketStorageDeal(context.Context, abi.DealID, types.TipSetKey) (*MarketDeal, error) //perm:read
+	// StateGetAllocationForPendingDeal returns the allocation for a given deal ID of a pending deal. Returns nil if
+	// pending allocation is not found.
+	StateGetAllocationForPendingDeal(ctx context.Context, dealId abi.DealID, tsk types.TipSetKey) (*verifregtypes.Allocation, error) //perm:read
+	// StateGetAllocation returns the allocation for a given address and allocation ID.
+	StateGetAllocation(ctx context.Context, clientAddr address.Address, allocationId verifregtypes.AllocationId, tsk types.TipSetKey) (*verifregtypes.Allocation, error) //perm:read
+	// StateGetAllocations returns the all the allocations for a given client.
+	StateGetAllocations(ctx context.Context, clientAddr address.Address, tsk types.TipSetKey) (map[verifregtypes.AllocationId]verifregtypes.Allocation, error) //perm:read
+	// StateGetClaim returns the claim for a given address and claim ID.
+	StateGetClaim(ctx context.Context, providerAddr address.Address, claimId verifregtypes.ClaimId, tsk types.TipSetKey) (*verifregtypes.Claim, error) //perm:read
+	// StateGetClaims returns the all the claims for a given provider.
+	StateGetClaims(ctx context.Context, providerAddr address.Address, tsk types.TipSetKey) (map[verifregtypes.ClaimId]verifregtypes.Claim, error) //perm:read
+	// StateComputeDataCID computes DataCID from a set of on-chain deals
+	StateComputeDataCID(ctx context.Context, maddr address.Address, sectorType abi.RegisteredSealProof, deals []abi.DealID, tsk types.TipSetKey) (cid.Cid, error) //perm:read
 	// StateLookupID retrieves the ID address of the given address
 	StateLookupID(context.Context, address.Address, types.TipSetKey) (address.Address, error) //perm:read
 	// StateAccountKey returns the public key address of the given ID address for secp and bls accounts
@@ -538,6 +560,8 @@ type FullNode interface {
 	StateChangedActors(context.Context, cid.Cid, cid.Cid) (map[string]types.Actor, error) //perm:read
 	// StateMinerSectorCount returns the number of sectors in a miner's sector set and proving set
 	StateMinerSectorCount(context.Context, address.Address, types.TipSetKey) (MinerSectors, error) //perm:read
+	// StateMinerAllocated returns a bitfield containing all sector numbers marked as allocated in miner state
+	StateMinerAllocated(context.Context, address.Address, types.TipSetKey) (*bitfield.BitField, error) //perm:read
 	// StateCompute is a flexible command that applies the given messages on the given tipset.
 	// The messages are run as though the VM were at the provided height.
 	//
@@ -579,7 +603,7 @@ type FullNode interface {
 	// Returns nil if there is no entry in the data cap table for the
 	// address.
 	StateVerifiedClientStatus(ctx context.Context, addr address.Address, tsk types.TipSetKey) (*abi.StoragePower, error) //perm:read
-	// StateVerifiedClientStatus returns the address of the Verified Registry's root key
+	// StateVerifiedRegistryRootKey returns the address of the Verified Registry's root key
 	StateVerifiedRegistryRootKey(ctx context.Context, tsk types.TipSetKey) (address.Address, error) //perm:read
 	// StateDealProviderCollateralBounds returns the min and max collateral a storage provider
 	// can issue. It takes the deal size and verified status as parameters.
@@ -595,6 +619,8 @@ type FullNode interface {
 	StateNetworkVersion(context.Context, types.TipSetKey) (apitypes.NetworkVersion, error) //perm:read
 	// StateActorCodeCIDs returns the CIDs of all the builtin actors for the given network version
 	StateActorCodeCIDs(context.Context, abinetwork.Version) (map[string]cid.Cid, error) //perm:read
+	// StateActorManifestCID returns the CID of the builtin actors manifest for the given network version
+	StateActorManifestCID(context.Context, abinetwork.Version) (cid.Cid, error) //perm:read
 
 	// StateGetRandomnessFromTickets is used to sample the chain for randomness.
 	StateGetRandomnessFromTickets(ctx context.Context, personalization crypto.DomainSeparationTag, randEpoch abi.ChainEpoch, entropy []byte, tsk types.TipSetKey) (abi.Randomness, error) //perm:read
@@ -745,6 +771,9 @@ type FullNode interface {
 	// LOTUS_BACKUP_BASE_PATH environment variable set to some path, and that
 	// the path specified when calling CreateBackup is within the base path
 	CreateBackup(ctx context.Context, fpath string) error //perm:admin
+
+	RaftState(ctx context.Context) (*RaftStateData, error) //perm:read
+	RaftLeader(ctx context.Context) (peer.ID, error)       //perm:read
 }
 
 type StorageAsk struct {
@@ -994,7 +1023,11 @@ type RetrievalOrder struct {
 	Client                  address.Address
 	Miner                   address.Address
 	MinerPeer               *retrievalmarket.RetrievalPeer
+
+	RemoteStore *RemoteStoreID `json:"RemoteStore,omitempty"`
 }
+
+type RemoteStoreID = uuid.UUID
 
 type InvocResult struct {
 	MsgCid         cid.Cid
@@ -1220,4 +1253,9 @@ type MsigTransaction struct {
 	Params []byte
 
 	Approved []address.Address
+}
+
+type PruneOpts struct {
+	MovingGC    bool
+	RetainState int64
 }

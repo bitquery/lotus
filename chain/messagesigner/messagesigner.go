@@ -5,6 +5,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
 	logging "github.com/ipfs/go-log/v2"
@@ -14,17 +15,22 @@ import (
 	"github.com/filecoin-project/go-address"
 
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
 const dsKeyActorNonce = "ActorNextNonce"
+const dsKeyMsgUUIDSet = "MsgUuidSet"
 
 var log = logging.Logger("messagesigner")
 
-type MpoolNonceAPI interface {
-	GetNonce(context.Context, address.Address, types.TipSetKey) (uint64, error)
-	GetActor(context.Context, address.Address, types.TipSetKey) (*types.Actor, error)
+type MsgSigner interface {
+	SignMessage(ctx context.Context, msg *types.Message, spec *api.MessageSendSpec, cb func(*types.SignedMessage) error) (*types.SignedMessage, error)
+	GetSignedMessage(ctx context.Context, uuid uuid.UUID) (*types.SignedMessage, error)
+	StoreSignedMessage(ctx context.Context, uuid uuid.UUID, message *types.SignedMessage) error
+	NextNonce(ctx context.Context, addr address.Address) (uint64, error)
+	SaveNonce(ctx context.Context, addr address.Address, nonce uint64) error
 }
 
 // MessageSigner keeps track of nonces per address, and increments the nonce
@@ -32,11 +38,11 @@ type MpoolNonceAPI interface {
 type MessageSigner struct {
 	wallet api.Wallet
 	lk     sync.Mutex
-	mpool  MpoolNonceAPI
+	mpool  messagepool.MpoolNonceAPI
 	ds     datastore.Batching
 }
 
-func NewMessageSigner(wallet api.Wallet, mpool MpoolNonceAPI, ds dtypes.MetadataDS) *MessageSigner {
+func NewMessageSigner(wallet api.Wallet, mpool messagepool.MpoolNonceAPI, ds dtypes.MetadataDS) *MessageSigner {
 	ds = namespace.Wrap(ds, datastore.NewKey("/message-signer/"))
 	return &MessageSigner{
 		wallet: wallet,
@@ -47,12 +53,12 @@ func NewMessageSigner(wallet api.Wallet, mpool MpoolNonceAPI, ds dtypes.Metadata
 
 // SignMessage increments the nonce for the message From address, and signs
 // the message
-func (ms *MessageSigner) SignMessage(ctx context.Context, msg *types.Message, cb func(*types.SignedMessage) error) (*types.SignedMessage, error) {
+func (ms *MessageSigner) SignMessage(ctx context.Context, msg *types.Message, spec *api.MessageSendSpec, cb func(*types.SignedMessage) error) (*types.SignedMessage, error) {
 	ms.lk.Lock()
 	defer ms.lk.Unlock()
 
 	// Get the next message nonce
-	nonce, err := ms.nextNonce(ctx, msg.From)
+	nonce, err := ms.NextNonce(ctx, msg.From)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create nonce: %w", err)
 	}
@@ -70,7 +76,7 @@ func (ms *MessageSigner) SignMessage(ctx context.Context, msg *types.Message, cb
 		Extra: mb.RawData(),
 	})
 	if err != nil {
-		return nil, xerrors.Errorf("failed to sign message: %w", err)
+		return nil, xerrors.Errorf("failed to sign message: %w, addr=%s", err, msg.From)
 	}
 
 	// Callback with the signed message
@@ -78,22 +84,43 @@ func (ms *MessageSigner) SignMessage(ctx context.Context, msg *types.Message, cb
 		Message:   *msg,
 		Signature: *sig,
 	}
+
 	err = cb(smsg)
 	if err != nil {
 		return nil, err
 	}
 
 	// If the callback executed successfully, write the nonce to the datastore
-	if err := ms.saveNonce(ctx, msg.From, nonce); err != nil {
+	if err := ms.SaveNonce(ctx, msg.From, nonce); err != nil {
 		return nil, xerrors.Errorf("failed to save nonce: %w", err)
 	}
 
 	return smsg, nil
 }
 
-// nextNonce gets the next nonce for the given address.
+func (ms *MessageSigner) GetSignedMessage(ctx context.Context, uuid uuid.UUID) (*types.SignedMessage, error) {
+
+	key := datastore.KeyWithNamespaces([]string{dsKeyMsgUUIDSet, uuid.String()})
+	bytes, err := ms.ds.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	return types.DecodeSignedMessage(bytes)
+}
+
+func (ms *MessageSigner) StoreSignedMessage(ctx context.Context, uuid uuid.UUID, message *types.SignedMessage) error {
+
+	key := datastore.KeyWithNamespaces([]string{dsKeyMsgUUIDSet, uuid.String()})
+	serializedMsg, err := message.Serialize()
+	if err != nil {
+		return err
+	}
+	return ms.ds.Put(ctx, key, serializedMsg)
+}
+
+// NextNonce gets the next nonce for the given address.
 // If there is no nonce in the datastore, gets the nonce from the message pool.
-func (ms *MessageSigner) nextNonce(ctx context.Context, addr address.Address) (uint64, error) {
+func (ms *MessageSigner) NextNonce(ctx context.Context, addr address.Address) (uint64, error) {
 	// Nonces used to be created by the mempool and we need to support nodes
 	// that have mempool nonces, so first check the mempool for a nonce for
 	// this address. Note that the mempool returns the actor state's nonce
@@ -137,9 +164,9 @@ func (ms *MessageSigner) nextNonce(ctx context.Context, addr address.Address) (u
 	}
 }
 
-// saveNonce increments the nonce for this address and writes it to the
+// SaveNonce increments the nonce for this address and writes it to the
 // datastore
-func (ms *MessageSigner) saveNonce(ctx context.Context, addr address.Address, nonce uint64) error {
+func (ms *MessageSigner) SaveNonce(ctx context.Context, addr address.Address, nonce uint64) error {
 	// Increment the nonce
 	nonce++
 

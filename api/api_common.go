@@ -3,13 +3,14 @@ package api
 import (
 	"context"
 	"fmt"
-
-	apitypes "github.com/filecoin-project/lotus/api/types"
-	"github.com/filecoin-project/lotus/journal/alerting"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/filecoin-project/go-jsonrpc/auth"
+
+	apitypes "github.com/filecoin-project/lotus/api/types"
+	"github.com/filecoin-project/lotus/journal/alerting"
 )
 
 //                       MODIFYING THE API INTERFACE
@@ -48,6 +49,9 @@ type Common interface {
 
 	// trigger graceful shutdown
 	Shutdown(context.Context) error //perm:admin
+
+	// StartTime returns node start time
+	StartTime(context.Context) (time.Time, error) //perm:read
 
 	// Session returns a random UUID of api provider session
 	Session(context.Context) (uuid.UUID, error) //perm:read

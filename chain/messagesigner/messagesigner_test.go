@@ -1,4 +1,4 @@
-//stm: #unit
+// stm: #unit
 package messagesigner
 
 import (
@@ -6,18 +6,16 @@ import (
 	"sync"
 	"testing"
 
-	"golang.org/x/xerrors"
-
-	"github.com/filecoin-project/lotus/chain/wallet"
-
-	"github.com/stretchr/testify/require"
-
+	"github.com/ipfs/go-datastore"
 	ds_sync "github.com/ipfs/go-datastore/sync"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 
+	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/ipfs/go-datastore"
+	"github.com/filecoin-project/lotus/chain/wallet"
 )
 
 type mockMpool struct {
@@ -25,7 +23,7 @@ type mockMpool struct {
 	nonces map[address.Address]uint64
 }
 
-var _ MpoolNonceAPI = (*mockMpool)(nil)
+var _ messagepool.MpoolNonceAPI = (*mockMpool)(nil)
 
 func newMockMpool() *mockMpool {
 	return &mockMpool{nonces: make(map[address.Address]uint64)}
@@ -190,7 +188,7 @@ func TestMessageSignerSignMessage(t *testing.T) {
 					mpool.setNonce(m.msg.From, m.mpoolNonce[0])
 				}
 				merr := m.cbErr
-				smsg, err := ms.SignMessage(ctx, m.msg, func(message *types.SignedMessage) error {
+				smsg, err := ms.SignMessage(ctx, m.msg, nil, func(message *types.SignedMessage) error {
 					return merr
 				})
 

@@ -1,10 +1,10 @@
-//stm: #unit
+// stm: #unit
 package main
 
 import (
 	"testing"
 
-	cid "github.com/ipfs/go-cid"
+	"github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/assert"
 )

@@ -1,4 +1,4 @@
-//stm: @unit
+// stm: @unit
 package dagstore
 
 import (
@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/dagstore/mount"
+
 	mock_dagstore "github.com/filecoin-project/lotus/markets/dagstore/mocks"
 )
 

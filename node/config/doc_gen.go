@@ -34,7 +34,10 @@ var Doc = map[string][]DocField{
 			Name: "DisableMetadataLog",
 			Type: "bool",
 
-			Comment: `Note that in case of metadata corruption it might be much harder to recover
+			Comment: `When set to true disables metadata log (.lotus/kvlog). This can save disk
+space by reducing metadata redundancy.
+
+Note that in case of metadata corruption it might be much harder to recover
 your node if metadata log is disabled`,
 		},
 	},
@@ -322,14 +325,14 @@ regardless of this number.`,
 			Type: "string",
 
 			Comment: `A command used for fine-grained evaluation of storage deals
-see https://docs.filecoin.io/mine/lotus/miner-configuration/#using-filters-for-fine-grained-storage-and-retrieval-deal-acceptance for more details`,
+see https://lotus.filecoin.io/storage-providers/advanced-configurations/market/#using-filters-for-fine-grained-storage-and-retrieval-deal-acceptance for more details`,
 		},
 		{
 			Name: "RetrievalFilter",
 			Type: "string",
 
 			Comment: `A command used for fine-grained evaluation of retrieval deals
-see https://docs.filecoin.io/mine/lotus/miner-configuration/#using-filters-for-fine-grained-storage-and-retrieval-deal-acceptance for more details`,
+see https://lotus.filecoin.io/storage-providers/advanced-configurations/market/#using-filters-for-fine-grained-storage-and-retrieval-deal-acceptance for more details`,
 		},
 		{
 			Name: "RetrievalPricing",
@@ -368,6 +371,12 @@ see https://docs.filecoin.io/mine/lotus/miner-configuration/#using-filters-for-f
 		{
 			Name: "Chainstore",
 			Type: "Chainstore",
+
+			Comment: ``,
+		},
+		{
+			Name: "Cluster",
+			Type: "UserRaftConfig",
 
 			Comment: ``,
 		},
@@ -627,7 +636,126 @@ over the worker address if this flag is set.`,
 			Name: "ParallelCheckLimit",
 			Type: "int",
 
-			Comment: `Maximum number of sector checks to run in parallel. (0 = unlimited)`,
+			Comment: `Maximum number of sector checks to run in parallel. (0 = unlimited)
+
+WARNING: Setting this value too high may make the node crash by running out of stack
+WARNING: Setting this value too low may make sector challenge reading much slower, resulting in failed PoSt due
+to late submission.
+
+After changing this option, confirm that the new value works in your setup by invoking
+'lotus-miner proving compute window-post 0'`,
+		},
+		{
+			Name: "SingleCheckTimeout",
+			Type: "Duration",
+
+			Comment: `Maximum amount of time a proving pre-check can take for a sector. If the check times out the sector will be skipped
+
+WARNING: Setting this value too low risks in sectors being skipped even though they are accessible, just reading the
+test challenge took longer than this timeout
+WARNING: Setting this value too high risks missing PoSt deadline in case IO operations related to this sector are
+blocked (e.g. in case of disconnected NFS mount)`,
+		},
+		{
+			Name: "PartitionCheckTimeout",
+			Type: "Duration",
+
+			Comment: `Maximum amount of time a proving pre-check can take for an entire partition. If the check times out, sectors in
+the partition which didn't get checked on time will be skipped
+
+WARNING: Setting this value too low risks in sectors being skipped even though they are accessible, just reading the
+test challenge took longer than this timeout
+WARNING: Setting this value too high risks missing PoSt deadline in case IO operations related to this partition are
+blocked or slow`,
+		},
+		{
+			Name: "DisableBuiltinWindowPoSt",
+			Type: "bool",
+
+			Comment: `Disable Window PoSt computation on the lotus-miner process even if no window PoSt workers are present.
+
+WARNING: If no windowPoSt workers are connected, window PoSt WILL FAIL resulting in faulty sectors which will need
+to be recovered. Before enabling this option, make sure your PoSt workers work correctly.
+
+After changing this option, confirm that the new value works in your setup by invoking
+'lotus-miner proving compute window-post 0'`,
+		},
+		{
+			Name: "DisableBuiltinWinningPoSt",
+			Type: "bool",
+
+			Comment: `Disable Winning PoSt computation on the lotus-miner process even if no winning PoSt workers are present.
+
+WARNING: If no WinningPoSt workers are connected, Winning PoSt WILL FAIL resulting in lost block rewards.
+Before enabling this option, make sure your PoSt workers work correctly.`,
+		},
+		{
+			Name: "DisableWDPoStPreChecks",
+			Type: "bool",
+
+			Comment: `Disable WindowPoSt provable sector readability checks.
+
+In normal operation, when preparing to compute WindowPoSt, lotus-miner will perform a round of reading challenges
+from all sectors to confirm that those sectors can be proven. Challenges read in this process are discarded, as
+we're only interested in checking that sector data can be read.
+
+When using builtin proof computation (no PoSt workers, and DisableBuiltinWindowPoSt is set to false), this process
+can save a lot of time and compute resources in the case that some sectors are not readable - this is caused by
+the builtin logic not skipping snark computation when some sectors need to be skipped.
+
+When using PoSt workers, this process is mostly redundant, with PoSt workers challenges will be read once, and
+if challenges for some sectors aren't readable, those sectors will just get skipped.
+
+Disabling sector pre-checks will slightly reduce IO load when proving sectors, possibly resulting in shorter
+time to produce window PoSt. In setups with good IO capabilities the effect of this option on proving time should
+be negligible.
+
+NOTE: It likely is a bad idea to disable sector pre-checks in setups with no PoSt workers.
+
+NOTE: Even when this option is enabled, recovering sectors will be checked before recovery declaration message is
+sent to the chain
+
+After changing this option, confirm that the new value works in your setup by invoking
+'lotus-miner proving compute window-post 0'`,
+		},
+		{
+			Name: "MaxPartitionsPerPoStMessage",
+			Type: "int",
+
+			Comment: `Maximum number of partitions to prove in a single SubmitWindowPoSt messace. 0 = network limit (10 in nv16)
+
+A single partition may contain up to 2349 32GiB sectors, or 2300 64GiB sectors.
+
+The maximum number of sectors which can be proven in a single PoSt message is 25000 in network version 16, which
+means that a single message can prove at most 10 partitions
+
+Note that setting this value lower may result in less efficient gas use - more messages will be sent,
+to prove each deadline, resulting in more total gas use (but each message will have lower gas limit)
+
+Setting this value above the network limit has no effect`,
+		},
+		{
+			Name: "MaxPartitionsPerRecoveryMessage",
+			Type: "int",
+
+			Comment: `In some cases when submitting DeclareFaultsRecovered messages,
+there may be too many recoveries to fit in a BlockGasLimit.
+In those cases it may be necessary to set this value to something low (eg 1);
+Note that setting this value lower may result in less efficient gas use - more messages will be sent than needed,
+resulting in more total gas use (but each message will have lower gas limit)`,
+		},
+		{
+			Name: "SingleRecoveringPartitionPerPostMessage",
+			Type: "bool",
+
+			Comment: `Enable single partition per PoSt Message for partitions containing recovery sectors
+
+In cases when submitting PoSt messages which contain recovering sectors, the default network limit may still be
+too high to fit in the block gas limit. In those cases, it becomes useful to only house the single partition
+with recovering sectors in the post message
+
+Note that setting this value lower may result in less efficient gas use - more messages will be sent,
+to prove each deadline, resulting in more total gas use (but each message will have lower gas limit)`,
 		},
 	},
 	"Pubsub": []DocField{
@@ -709,10 +837,16 @@ This parameter is ONLY applicable if the retrieval pricing policy strategy has b
 			Comment: ``,
 		},
 		{
+			Name: "AllowSectorDownload",
+			Type: "bool",
+
+			Comment: ``,
+		},
+		{
 			Name: "AllowAddPiece",
 			Type: "bool",
 
-			Comment: `Local worker config`,
+			Comment: ``,
 		},
 		{
 			Name: "AllowPreCommit1",
@@ -757,8 +891,39 @@ This parameter is ONLY applicable if the retrieval pricing policy strategy has b
 			Comment: ``,
 		},
 		{
+			Name: "LocalWorkerName",
+			Type: "string",
+
+			Comment: `LocalWorkerName specifies a custom name for the builtin worker.
+If set to an empty string (default) os hostname will be used`,
+		},
+		{
+			Name: "Assigner",
+			Type: "string",
+
+			Comment: `Assigner specifies the worker assigner to use when scheduling tasks.
+"utilization" (default) - assign tasks to workers with lowest utilization.
+"spread" - assign tasks to as many distinct workers as possible.`,
+		},
+		{
+			Name: "DisallowRemoteFinalize",
+			Type: "bool",
+
+			Comment: `DisallowRemoteFinalize when set to true will force all Finalize tasks to
+run on workers with local access to both long-term storage and the sealing
+path containing the sector.
+--
+WARNING: Only set this if all workers have access to long-term storage
+paths. If this flag is enabled, and there are workers without long-term
+storage access, sectors will not be moved from them, and Finalize tasks
+will appear to be stuck.
+--
+If you see stuck Finalize tasks after enabling this setting, check
+'lotus-miner sealing sched-diag' and 'lotus-miner storage find [sector num]'`,
+		},
+		{
 			Name: "ResourceFiltering",
-			Type: "sectorstorage.ResourceFilteringStrategy",
+			Type: "ResourceFilteringStrategy",
 
 			Comment: `ResourceFiltering instructs the system which resource filtering strategy
 to use when evaluating tasks against this worker. An empty value defaults
@@ -802,6 +967,30 @@ flow when the volume of storage deals is lower.`,
 			Type: "uint64",
 
 			Comment: `Upper bound on how many sectors can be sealing+upgrading at the same time when upgrading CC sectors with deals (0 = MaxSealingSectorsForDeals)`,
+		},
+		{
+			Name: "MinUpgradeSectorExpiration",
+			Type: "uint64",
+
+			Comment: `When set to a non-zero value, minimum number of epochs until sector expiration required for sectors to be considered
+for upgrades (0 = DealMinDuration = 180 days = 518400 epochs)
+
+Note that if all deals waiting in the input queue have lifetimes longer than this value, upgrade sectors will be
+required to have expiration of at least the soonest-ending deal`,
+		},
+		{
+			Name: "MinTargetUpgradeSectorExpiration",
+			Type: "uint64",
+
+			Comment: `When set to a non-zero value, minimum number of epochs until sector expiration above which upgrade candidates will
+be selected based on lowest initial pledge.
+
+Target sector expiration is calculated by looking at the input deal queue, sorting it by deal expiration, and
+selecting N deals from the queue up to sector size. The target expiration will be Nth deal end epoch, or in case
+where there weren't enough deals to fill a sector, DealMaxDuration (540 days = 1555200 epochs)
+
+Setting this to a high value (for example to maximum deal duration - 1555200) will disable selection based on
+initial pledge - upgrade sectors will always be chosen based on longest expiration`,
 		},
 		{
 			Name: "CommittedCapacitySectorLifetime",
@@ -897,13 +1086,13 @@ This is useful for forcing all deals to be assigned as snap deals to sectors mar
 			Name: "MinCommitBatch",
 			Type: "int",
 
-			Comment: `maximum batched commit size - batches will be sent immediately above this size`,
+			Comment: `minimum batched commit size - batches above this size will eventually be sent on a timeout`,
 		},
 		{
 			Name: "MaxCommitBatch",
 			Type: "int",
 
-			Comment: ``,
+			Comment: `maximum batched commit size - batches will be sent immediately above this size`,
 		},
 		{
 			Name: "CommitBatchWait",
@@ -956,7 +1145,7 @@ submitting proofs to the chain individually`,
 			Type: "string",
 
 			Comment: `ColdStoreType specifies the type of the coldstore.
-It can be "universal" (default) or "discard" for discarding cold blocks.`,
+It can be "messages" (default) to store only messages, "universal" to store all chain state or "discard" for discarding cold blocks.`,
 		},
 		{
 			Name: "HotStoreType",
@@ -1042,6 +1231,68 @@ Default is 20 (about once a week).`,
 			Type: "DAGStoreConfig",
 
 			Comment: ``,
+		},
+	},
+	"UserRaftConfig": []DocField{
+		{
+			Name: "ClusterModeEnabled",
+			Type: "bool",
+
+			Comment: `EXPERIMENTAL. config to enabled node cluster with raft consensus`,
+		},
+		{
+			Name: "DataFolder",
+			Type: "string",
+
+			Comment: `A folder to store Raft's data.`,
+		},
+		{
+			Name: "InitPeersetMultiAddr",
+			Type: "[]string",
+
+			Comment: `InitPeersetMultiAddr provides the list of initial cluster peers for new Raft
+peers (with no prior state). It is ignored when Raft was already
+initialized or when starting in staging mode.`,
+		},
+		{
+			Name: "WaitForLeaderTimeout",
+			Type: "Duration",
+
+			Comment: `LeaderTimeout specifies how long to wait for a leader before
+failing an operation.`,
+		},
+		{
+			Name: "NetworkTimeout",
+			Type: "Duration",
+
+			Comment: `NetworkTimeout specifies how long before a Raft network
+operation is timed out`,
+		},
+		{
+			Name: "CommitRetries",
+			Type: "int",
+
+			Comment: `CommitRetries specifies how many times we retry a failed commit until
+we give up.`,
+		},
+		{
+			Name: "CommitRetryDelay",
+			Type: "Duration",
+
+			Comment: `How long to wait between retries`,
+		},
+		{
+			Name: "BackupsRotate",
+			Type: "int",
+
+			Comment: `BackupsRotate specifies the maximum number of Raft's DataFolder
+copies that we keep as backups (renaming) after cleanup.`,
+		},
+		{
+			Name: "Tracing",
+			Type: "bool",
+
+			Comment: `Tracing enables propagation of contexts across binary boundaries.`,
 		},
 	},
 	"Wallet": []DocField{

@@ -5,23 +5,23 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
-	builtin5 "github.com/filecoin-project/specs-actors/v5/actors/builtin"
-
-	"github.com/filecoin-project/lotus/chain/consensus/filcns"
+	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/urfave/cli/v2"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/specs-actors/v4/actors/util/adt"
+	builtin5 "github.com/filecoin-project/specs-actors/v5/actors/builtin"
+
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
+	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/node/repo"
-	"github.com/filecoin-project/specs-actors/v4/actors/util/adt"
-	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	"github.com/urfave/cli/v2"
-	"golang.org/x/xerrors"
 )
 
 var minerPeeridCmd = &cli.Command{
@@ -36,7 +36,7 @@ var minerPeeridCmd = &cli.Command{
 		ctx := context.TODO()
 
 		if cctx.NArg() != 2 {
-			return fmt.Errorf("must pass peer id and state root")
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		pid, err := peer.Decode(cctx.Args().Get(0))

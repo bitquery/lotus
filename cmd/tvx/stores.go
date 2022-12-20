@@ -5,24 +5,22 @@ import (
 	"log"
 	"sync"
 
-	"github.com/filecoin-project/lotus/api/v0api"
-
 	"github.com/fatih/color"
-	dssync "github.com/ipfs/go-datastore/sync"
-
-	"github.com/filecoin-project/lotus/blockstore"
-
-	"github.com/filecoin-project/lotus/chain/actors/adt"
-
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
+	dssync "github.com/ipfs/go-datastore/sync"
 	exchange "github.com/ipfs/go-ipfs-exchange-interface"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	format "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-merkledag"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/lotus/api/v0api"
+	"github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/chain/actors/adt"
 )
 
 // Stores is a collection of the different stores and services that are needed
@@ -160,4 +158,13 @@ func (pb *proxyingBlockstore) PutMany(ctx context.Context, blocks []blocks.Block
 	}
 	pb.lk.Unlock()
 	return pb.Blockstore.PutMany(ctx, blocks)
+}
+
+func (pb *proxyingBlockstore) View(ctx context.Context, c cid.Cid, callback func([]byte) error) error {
+	blk, err := pb.Get(ctx, c)
+	if err != nil {
+		return xerrors.Errorf("failed to Get cid %s: %w", c, err)
+	}
+
+	return callback(blk.RawData())
 }

@@ -10,7 +10,6 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/network"
-
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 
 	"github.com/filecoin-project/lotus/chain/actors/policy"
@@ -27,14 +26,14 @@ const UnixfsLinksPerLevel = 1024
 
 const AllowableClockDriftSecs = uint64(1)
 
-// TODO: This is still terrible...What's the impact of updating this before mainnet actually upgrades
+// Used by tests and some obscure tooling
 /* inline-gen template
 
-const NewestNetworkVersion = network.Version{{.latestNetworkVersion}}
+const TestNetworkVersion = network.Version{{.latestNetworkVersion}}
 
 /* inline-gen start */
 
-const NewestNetworkVersion = network.Version16
+const TestNetworkVersion = network.Version17
 
 /* inline-gen end */
 
@@ -119,8 +118,9 @@ const VerifSigCacheSize = 32000
 // TODO: If this is gonna stay, it should move to specs-actors
 const BlockMessageLimit = 10000
 
-const BlockGasLimit = 10_000_000_000
-const BlockGasTarget = BlockGasLimit / 2
+var BlockGasLimit = int64(10_000_000_000)
+var BlockGasTarget = BlockGasLimit / 2
+
 const BaseFeeMaxChangeDenom = 8 // 12.5%
 const InitialBaseFee = 100e6
 const MinimumBaseFee = 100

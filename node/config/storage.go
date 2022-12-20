@@ -8,11 +8,10 @@ import (
 
 	"golang.org/x/xerrors"
 
-	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
-	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
-func StorageFromFile(path string, def *stores.StorageConfig) (*stores.StorageConfig, error) {
+func StorageFromFile(path string, def *storiface.StorageConfig) (*storiface.StorageConfig, error) {
 	file, err := os.Open(path)
 	switch {
 	case os.IsNotExist(err):
@@ -28,8 +27,8 @@ func StorageFromFile(path string, def *stores.StorageConfig) (*stores.StorageCon
 	return StorageFromReader(file)
 }
 
-func StorageFromReader(reader io.Reader) (*stores.StorageConfig, error) {
-	var cfg stores.StorageConfig
+func StorageFromReader(reader io.Reader) (*storiface.StorageConfig, error) {
+	var cfg storiface.StorageConfig
 	err := json.NewDecoder(reader).Decode(&cfg)
 	if err != nil {
 		return nil, err
@@ -38,7 +37,7 @@ func StorageFromReader(reader io.Reader) (*stores.StorageConfig, error) {
 	return &cfg, nil
 }
 
-func WriteStorageFile(path string, config stores.StorageConfig) error {
+func WriteStorageFile(path string, config storiface.StorageConfig) error {
 	b, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return xerrors.Errorf("marshaling storage config: %w", err)
@@ -49,21 +48,4 @@ func WriteStorageFile(path string, config stores.StorageConfig) error {
 	}
 
 	return nil
-}
-
-func (c *StorageMiner) StorageManager() sectorstorage.Config {
-	return sectorstorage.Config{
-		ParallelFetchLimit:       c.Storage.ParallelFetchLimit,
-		AllowAddPiece:            c.Storage.AllowAddPiece,
-		AllowPreCommit1:          c.Storage.AllowPreCommit1,
-		AllowPreCommit2:          c.Storage.AllowPreCommit2,
-		AllowCommit:              c.Storage.AllowCommit,
-		AllowUnseal:              c.Storage.AllowUnseal,
-		AllowReplicaUpdate:       c.Storage.AllowReplicaUpdate,
-		AllowProveReplicaUpdate2: c.Storage.AllowProveReplicaUpdate2,
-		AllowRegenSectorKey:      c.Storage.AllowRegenSectorKey,
-		ResourceFiltering:        c.Storage.ResourceFiltering,
-
-		ParallelCheckLimit: c.Proving.ParallelCheckLimit,
-	}
 }

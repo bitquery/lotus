@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -8,13 +8,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/network"
+
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/itests/kit"
 	bminer "github.com/filecoin-project/lotus/miner"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSDRUpgrade(t *testing.T) {
@@ -93,7 +95,7 @@ func TestSDRUpgrade(t *testing.T) {
 	// before.
 	miner.PledgeSectors(ctx, 9, 0, pledge)
 
-	s, err := miner.SectorsList(ctx)
+	s, err := miner.SectorsListNonGenesis(ctx)
 	require.NoError(t, err)
 	sort.Slice(s, func(i, j int) bool {
 		return s[i] < s[j]

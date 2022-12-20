@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
@@ -35,6 +34,7 @@ type FullNodeAPI struct {
 	full.MsigAPI
 	full.WalletAPI
 	full.SyncAPI
+	full.RaftAPI
 
 	DS          dtypes.MetadataDS
 	NetworkName dtypes.NetworkName
@@ -116,6 +116,14 @@ func (n *FullNodeAPI) NodeStatus(ctx context.Context, inclChainStatus bool) (sta
 	}
 
 	return status, nil
+}
+
+func (n *FullNodeAPI) RaftState(ctx context.Context) (*api.RaftStateData, error) {
+	return n.RaftAPI.GetRaftState(ctx)
+}
+
+func (n *FullNodeAPI) RaftLeader(ctx context.Context) (peer.ID, error) {
+	return n.RaftAPI.Leader(ctx)
 }
 
 var _ api.FullNode = &FullNodeAPI{}

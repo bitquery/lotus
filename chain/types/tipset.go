@@ -7,12 +7,13 @@ import (
 	"io"
 	"sort"
 
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/minio/blake2b-simd"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-state-types/abi"
 )
 
 var log = logging.Logger("types")
@@ -98,11 +99,11 @@ func tipsetSortFunc(blks []*BlockHeader) func(i, j int) bool {
 }
 
 // Checks:
-// * A tipset is composed of at least one block. (Because of our variable
-//   number of blocks per tipset, determined by randomness, we do not impose
-//   an upper limit.)
-// * All blocks have the same height.
-// * All blocks have the same parents (same number of them and matching CIDs).
+//   - A tipset is composed of at least one block. (Because of our variable
+//     number of blocks per tipset, determined by randomness, we do not impose
+//     an upper limit.)
+//   - All blocks have the same height.
+//   - All blocks have the same parents (same number of them and matching CIDs).
 func NewTipSet(blks []*BlockHeader) (*TipSet, error) {
 	if len(blks) == 0 {
 		return nil, xerrors.Errorf("NewTipSet called with zero length array of blocks")
