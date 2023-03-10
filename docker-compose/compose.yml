@@ -28,7 +28,7 @@ services:
     shm_size: '4gb'
     volumes:
       - data:/var/lib/lotus
-      - ./config/confg.toml:/var/lib/lotus/config.toml
+      - ./config/config.toml:/var/lib/lotus/config.toml
     <<: *common-logging
     <<: *common-network
     <<: *common-dns
