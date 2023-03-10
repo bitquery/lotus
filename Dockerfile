@@ -84,14 +84,9 @@ USER fc
 
 EXPOSE 1234
 
-ENTRYPOINT ["/docker-lotus-entrypoint.sh"]
-
-CMD ["-help"]
-
-
-
 
 FROM base AS runner
+MAINTAINER BitQuery
 
 ENV FILECOIN_PARAMETER_CACHE /var/tmp/filecoin-proof-parameters
 ENV LOTUS_MINER_PATH /var/lib/lotus-miner
@@ -123,3 +118,7 @@ EXPOSE 1234
 EXPOSE 2345
 EXPOSE 3456
 EXPOSE 1777
+
+ENTRYPOINT ["/docker-lotus-entrypoint.sh"]
+
+CMD ["-help"]
