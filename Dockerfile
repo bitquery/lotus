@@ -49,18 +49,17 @@ RUN make buildall
 
 
 FROM ubuntu:20.04 AS base
-
 MAINTAINER BitQuery
 
-COPY --from=lotus-builder /etc/ssl/certs            /etc/ssl/certs
-COPY --from=lotus-builder /lib/*/libdl.so.2         /lib/
-COPY --from=lotus-builder /lib/*/librt.so.1         /lib/
-COPY --from=lotus-builder /lib/*/libgcc_s.so.1      /lib/
-COPY --from=lotus-builder /lib/*/libutil.so.1       /lib/
-COPY --from=lotus-builder /usr/lib/*/libltdl.so.7   /lib/
-COPY --from=lotus-builder /usr/lib/*/libnuma.so.1   /lib/
-COPY --from=lotus-builder /usr/lib/*/libhwloc.so.5  /lib/
-COPY --from=lotus-builder /usr/lib/*/libOpenCL.so.1 /lib/
+COPY --from=builder /etc/ssl/certs            /etc/ssl/certs
+COPY --from=builder /lib/*/libdl.so.2         /lib/
+COPY --from=builder /lib/*/librt.so.1         /lib/
+COPY --from=builder /lib/*/libgcc_s.so.1      /lib/
+COPY --from=builder /lib/*/libutil.so.1       /lib/
+COPY --from=builder /usr/lib/*/libltdl.so.7   /lib/
+COPY --from=builder /usr/lib/*/libnuma.so.1   /lib/
+COPY --from=builder /usr/lib/*/libhwloc.so.5  /lib/
+COPY --from=builder /usr/lib/*/libOpenCL.so.1 /lib/
 
 RUN useradd -r -u 532 -U fc \
  && mkdir -p /etc/OpenCL/vendors \
@@ -95,6 +94,8 @@ ENTRYPOINT ["/docker-lotus-entrypoint.sh"]
 CMD ["-help"]
 
 
+
+
 FROM base AS runner
 
 ENV FILECOIN_PARAMETER_CACHE /var/tmp/filecoin-proof-parameters
@@ -104,15 +105,15 @@ ENV LOTUS_WORKER_PATH /var/lib/lotus-worker
 ENV WALLET_PATH /var/lib/lotus-wallet
 
 
-COPY --from=lotus-builder /opt/filecoin/lotus          /usr/local/bin/
-COPY --from=lotus-builder /opt/filecoin/lotus-seed     /usr/local/bin/
-COPY --from=lotus-builder /opt/filecoin/lotus-shed     /usr/local/bin/
-COPY --from=lotus-builder /opt/filecoin/lotus-wallet   /usr/local/bin/
-COPY --from=lotus-builder /opt/filecoin/lotus-gateway  /usr/local/bin/
-COPY --from=lotus-builder /opt/filecoin/lotus-miner    /usr/local/bin/
-COPY --from=lotus-builder /opt/filecoin/lotus-worker   /usr/local/bin/
-COPY --from=lotus-builder /opt/filecoin/lotus-stats    /usr/local/bin/
-COPY --from=lotus-builder /opt/filecoin/lotus-fountain /usr/local/bin/
+COPY --from=builder /opt/filecoin/lotus          /usr/local/bin/
+COPY --from=builder /opt/filecoin/lotus-seed     /usr/local/bin/
+COPY --from=builder /opt/filecoin/lotus-shed     /usr/local/bin/
+COPY --from=builder /opt/filecoin/lotus-wallet   /usr/local/bin/
+COPY --from=builder /opt/filecoin/lotus-gateway  /usr/local/bin/
+COPY --from=builder /opt/filecoin/lotus-miner    /usr/local/bin/
+COPY --from=builder /opt/filecoin/lotus-worker   /usr/local/bin/
+COPY --from=builder /opt/filecoin/lotus-stats    /usr/local/bin/
+COPY --from=builder /opt/filecoin/lotus-fountain /usr/local/bin/
 
 RUN mkdir /var/tmp/filecoin-proof-parameters
 RUN mkdir /var/lib/lotus
