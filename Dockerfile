@@ -8,7 +8,8 @@ ENV RELEASE_VERSION=${RELEASE_VERSION:-v1.20.3rpc}
 RUN apt-get update \
     && apt-get install -y ca-certificates build-essential clang ocl-icd-opencl-dev ocl-icd-libopencl1 jq libhwloc-dev \
     && git checkout $RELEASE_VERSION \
-    && make clean && make all \
+    && make clean \
+    && make all \
     && make install
 
 
@@ -26,7 +27,9 @@ COPY --from=builder /usr/lib/*/libnuma.so.1   /lib/
 COPY --from=builder /usr/lib/*/libhwloc.so.5  /lib/
 COPY --from=builder /usr/lib/*/libOpenCL.so.1 /lib/
 
-RUN apt update && apt -y install iputils-ping curl
+RUN apt update \
+    && apt -y install iputils-ping curl \
+    && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 1234 25416
 
