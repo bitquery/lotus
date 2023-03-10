@@ -1,9 +1,5 @@
 FROM golang:1.18.8-buster as builder
-
 MAINTAINER BitQuery
-
-ARG RELEASE_VERSION
-ENV RELEASE_VERSION=${RELEASE_VERSION:-v1.20.3rpc}
 
 RUN apt-get update && apt-get install -y ca-certificates build-essential clang ocl-icd-opencl-dev ocl-icd-libopencl1 jq libhwloc-dev
 
@@ -50,14 +46,15 @@ FROM ubuntu:20.04 AS base
 MAINTAINER BitQuery
 
 COPY --from=builder /etc/ssl/certs            /etc/ssl/certs
-COPY --from=builder /lib/*/libdl.so.2         /lib/
-COPY --from=builder /lib/*/librt.so.1         /lib/
-COPY --from=builder /lib/*/libgcc_s.so.1      /lib/
-COPY --from=builder /lib/*/libutil.so.1       /lib/
-COPY --from=builder /usr/lib/*/libltdl.so.7   /lib/
-COPY --from=builder /usr/lib/*/libnuma.so.1   /lib/
-COPY --from=builder /usr/lib/*/libhwloc.so.5  /lib/
-COPY --from=builder /usr/lib/*/libOpenCL.so.1 /lib/
+COPY --from=builder /lib/*/libdl.so.2 \
+   /lib/*/librt.so.1 \
+   /lib/*/libgcc_s.so.1 \
+   /lib/*/libutil.so.1 \
+   /usr/lib/*/libltdl.so.7 \
+   /usr/lib/*/libnuma.so.1 \
+   /usr/lib/*/libhwloc.so.5 \
+   /usr/lib/*/libOpenCL.so.1 \
+   /lib/
 
 RUN useradd -r -u 532 -U fc \
  && mkdir -p /etc/OpenCL/vendors \
@@ -102,27 +99,19 @@ ENV LOTUS_PATH /var/lib/lotus
 ENV LOTUS_WORKER_PATH /var/lib/lotus-worker
 ENV WALLET_PATH /var/lib/lotus-wallet
 
+COPY --from=builder /opt/filecoin/lotus \
+   /opt/filecoin/lotus-seed \
+   /opt/filecoin/lotus-shed \
+   /opt/filecoin/lotus-wallet \
+   /opt/filecoin/lotus-gateway \
+   /opt/filecoin/lotus-miner \
+   /opt/filecoin/lotus-worker \
+   /opt/filecoin/lotus-stats \
+   /opt/filecoin/lotus-fountain \
+   /usr/local/bin/
 
-COPY --from=builder /opt/filecoin/lotus          /usr/local/bin/
-COPY --from=builder /opt/filecoin/lotus-seed     /usr/local/bin/
-COPY --from=builder /opt/filecoin/lotus-shed     /usr/local/bin/
-COPY --from=builder /opt/filecoin/lotus-wallet   /usr/local/bin/
-COPY --from=builder /opt/filecoin/lotus-gateway  /usr/local/bin/
-COPY --from=builder /opt/filecoin/lotus-miner    /usr/local/bin/
-COPY --from=builder /opt/filecoin/lotus-worker   /usr/local/bin/
-COPY --from=builder /opt/filecoin/lotus-stats    /usr/local/bin/
-COPY --from=builder /opt/filecoin/lotus-fountain /usr/local/bin/
-
-RUN mkdir /var/tmp/filecoin-proof-parameters
-RUN mkdir /var/lib/lotus
-RUN mkdir /var/lib/lotus-miner
-RUN mkdir /var/lib/lotus-worker
-RUN mkdir /var/lib/lotus-wallet
-RUN chown fc: /var/tmp/filecoin-proof-parameters
-RUN chown fc: /var/lib/lotus
-RUN chown fc: /var/lib/lotus-miner
-RUN chown fc: /var/lib/lotus-worker
-RUN chown fc: /var/lib/lotus-wallet
+RUN mkdir -p /var/tmp/filecoin-proof-parameters /var/lib/lotus /var/lib/lotus-miner /var/lib/lotus-worker /var/lib/lotus-wallet 
+RUN chown fc: /var/tmp/filecoin-proof-parameters /var/lib/lotus /var/lib/lotus-miner /var/lib/lotus-worker /var/lib/lotus-wallet
 
 VOLUME /var/tmp/filecoin-proof-parameters
 VOLUME /var/lib/lotus

@@ -1,0 +1,61 @@
+x-common-dns: &common-dns
+  dns: ${LC_COMPOSE_NAMESERVER}
+  dns_search: ${LC_COMPOSE_CLUSTER}.local
+  dns_opt: [ 'ndots:1' ]
+x-common-network: &common-network
+  networks:
+    - common
+x-common-restart: &common-restart
+  restart: "no"
+x-graceful-stop: &graceful-stop
+  stop_grace_period: 5m
+  stop_signal: SIGINT
+x-common-logging: &common-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "100m"
+      max-file: "10"
+
+services:
+  node:
+    image: ${LC_COMPOSE_IMAGE}:${LC_COMPOSE_IMAGE_TAG}
+    command: [ 'daemon' ]
+    environment:
+      - DOCKER_LOTUS_IMPORT_SNAPSHOT=${LC_COMPOSE_SNAPSHOT_URL}
+    ports:
+      - ${LC_COMPOSE_IPADDR}:${LC_COMPOSE_RPC_PORT}:1234
+    shm_size: '4gb'
+    volumes:
+      - data:/var/lib/lotus
+    <<: *common-logging
+    <<: *common-network
+    <<: *common-dns
+    <<: *common-restart
+    <<: *graceful-stop
+
+  exporter:
+    image: ${LC_COMPOSE_EXPORTER_IMAGE}:${LC_COMPOSE_EXPORTER_IMAGE_TAG}
+    environment:
+      - NODE_RPC_URL=http://${LC_COMPOSE_IPADDR}:${LC_COMPOSE_RPC_PORT}/rpc/v0
+      - NODE_RPC_USER=${LC_COMPOSE_NODE_RPC_USER}
+      - NODE_RPC_PASS=${LC_COMPOSE_NODE_RPC_PASS}
+      - NODE_NAME=${LC_COMPOSE_NAME}.${LC_COMPOSE_HOST}
+      - NODE_ROLE=${LC_COMPOSE_ROLE}
+      - NODE_TAG=${LC_COMPOSE_NODE_TAG}
+      - NODE_NETWORK=${LC_COMPOSE_NETWORK}
+      - NODE_PRIORITY=${LC_COMPOSE_PRIORITY}
+    ports:
+      - ${LC_COMPOSE_IPADDR}:${LC_COMPOSE_EXPORTER_PORT}:9228
+    <<: *common-logging
+    <<: *common-network
+    <<: *common-dns
+    <<: *common-restart
+
+volumes:
+  data:
+
+networks:
+  common:
+    external: ${LC_COMPOSE_NETWORK_EXTERNAL:-false}
+    name: "${LC_COMPOSE_NETWORK_ID:-bridge-lan}"
