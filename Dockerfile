@@ -61,6 +61,7 @@ RUN useradd -r -u 532 -U fc \
  && echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
 
 
+
 FROM base AS lotus
 MAINTAINER BitQuery
 
@@ -84,41 +85,41 @@ USER fc
 
 EXPOSE 1234
 
-
-FROM base AS runner
-MAINTAINER BitQuery
-
-ENV FILECOIN_PARAMETER_CACHE /var/tmp/filecoin-proof-parameters
-ENV LOTUS_MINER_PATH /var/lib/lotus-miner
-ENV LOTUS_PATH /var/lib/lotus
-ENV LOTUS_WORKER_PATH /var/lib/lotus-worker
-ENV WALLET_PATH /var/lib/lotus-wallet
-
-COPY --from=builder /opt/filecoin/lotus \
-   /opt/filecoin/lotus-seed \
-   /opt/filecoin/lotus-shed \
-   /opt/filecoin/lotus-wallet \
-   /opt/filecoin/lotus-gateway \
-   /opt/filecoin/lotus-miner \
-   /opt/filecoin/lotus-worker \
-   /opt/filecoin/lotus-stats \
-   /opt/filecoin/lotus-fountain \
-   /usr/local/bin/
-
-RUN mkdir -p /var/tmp/filecoin-proof-parameters /var/lib/lotus /var/lib/lotus-miner /var/lib/lotus-worker /var/lib/lotus-wallet 
-RUN chown fc: /var/tmp/filecoin-proof-parameters /var/lib/lotus /var/lib/lotus-miner /var/lib/lotus-worker /var/lib/lotus-wallet
-
-VOLUME /var/tmp/filecoin-proof-parameters
-VOLUME /var/lib/lotus
-VOLUME /var/lib/lotus-miner
-VOLUME /var/lib/lotus-worker
-VOLUME /var/lib/lotus-wallet
-
-EXPOSE 1234
-EXPOSE 2345
-EXPOSE 3456
-EXPOSE 1777
-
 ENTRYPOINT ["/docker-lotus-entrypoint.sh"]
 
 CMD ["-help"]
+
+
+#FROM base AS runner
+#MAINTAINER BitQuery
+
+#ENV FILECOIN_PARAMETER_CACHE /var/tmp/filecoin-proof-parameters
+#ENV LOTUS_MINER_PATH /var/lib/lotus-miner
+#ENV LOTUS_PATH /var/lib/lotus
+#ENV LOTUS_WORKER_PATH /var/lib/lotus-worker
+#ENV WALLET_PATH /var/lib/lotus-wallet
+
+#COPY --from=builder /opt/filecoin/lotus \
+#   /opt/filecoin/lotus-seed \
+#   /opt/filecoin/lotus-shed \
+#   /opt/filecoin/lotus-wallet \
+#   /opt/filecoin/lotus-gateway \
+#   /opt/filecoin/lotus-miner \
+#   /opt/filecoin/lotus-worker \
+#   /opt/filecoin/lotus-stats \
+#   /opt/filecoin/lotus-fountain \
+#   /usr/local/bin/
+
+#RUN mkdir -p /var/tmp/filecoin-proof-parameters /var/lib/lotus /var/lib/lotus-miner /var/lib/lotus-worker /var/lib/lotus-wallet 
+#RUN chown fc: /var/tmp/filecoin-proof-parameters /var/lib/lotus /var/lib/lotus-miner /var/lib/lotus-worker /var/lib/lotus-wallet
+
+#VOLUME /var/tmp/filecoin-proof-parameters
+#VOLUME /var/lib/lotus
+#VOLUME /var/lib/lotus-miner
+#VOLUME /var/lib/lotus-worker
+#VOLUME /var/lib/lotus-wallet
+
+#EXPOSE 1234
+#EXPOSE 2345
+#EXPOSE 3456
+#EXPOSE 1777
