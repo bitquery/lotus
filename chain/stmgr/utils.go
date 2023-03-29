@@ -49,7 +49,11 @@ func GetParamType(ar *vm.ActorRegistry, actCode cid.Cid, method abi.MethodNum) (
 	if !found {
 		return nil, fmt.Errorf("unknown method %d for actor %s: %w", method, actCode, ErrMetadataNotFound)
 	}
-	return reflect.New(m.Params.Elem()).Interface().(cbg.CBORUnmarshaler), nil
+	unmarshaller, ok := reflect.New(m.Params.Elem()).Interface().(cbg.CBORUnmarshaler)
+	if !ok {
+		return nil, fmt.Errorf("not CBORUnmarshaler method %d for actor %s: %w", method, actCode, ErrMetadataNotFound)
+	}
+	return unmarshaller, nil
 }
 
 func GetNetworkName(ctx context.Context, sm *StateManager, st cid.Cid) (dtypes.NetworkName, error) {
