@@ -39,7 +39,7 @@ ListenAddress = "/ip4/0.0.0.0/tcp/1234/http"
 #  DefaultMaxFee = "0.07 FIL"
 #
 [Chainstore]
-#  EnableSplitstore = false
+EnableSplitstore = false
 #  [Chainstore.Splitstore]
 #    HotStoreType = "badger"
 #    TrackingStoreType = ""
