@@ -29,11 +29,7 @@ services:
     volumes:
       - data:/var/lib/lotus
       - ./config/config.toml:/var/lib/lotus/config.toml
-    <<: *common-logging
-    <<: *common-network
-    <<: *common-dns
-    <<: *common-restart
-    <<: *graceful-stop
+    <<: [*common-logging, *common-network, *common-dns, *common-restart, *graceful-stop]
 
   exporter:
     image: ${LC_COMPOSE_EXPORTER_IMAGE}:${LC_COMPOSE_EXPORTER_IMAGE_TAG}
@@ -48,10 +44,7 @@ services:
       - NODE_PRIORITY=${LC_COMPOSE_PRIORITY}
     ports:
       - ${LC_COMPOSE_IPADDR}:${LC_COMPOSE_EXPORTER_PORT}:9228
-    <<: *common-logging
-    <<: *common-network
-    <<: *common-dns
-    <<: *common-restart
+    <<: [*common-logging, *common-network, *common-dns, *common-restart]
 
 volumes:
   data:
