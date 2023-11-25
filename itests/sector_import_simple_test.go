@@ -39,7 +39,9 @@ func TestSectorImportAfterPC2(t *testing.T) {
 	////////
 	// Start a miner node
 
-	client, miner, ens := kit.EnsembleMinimal(t, kit.ThroughRPC())
+	// We use two miners so that in case the actively tested miner misses PoSt, we still have a blockchain
+	client, miner, _, ens := kit.EnsembleOneTwo(t, kit.ThroughRPC())
+
 	ens.InterconnectAll().BeginMining(blockTime)
 
 	ctx := context.Background()
@@ -61,7 +63,7 @@ func TestSectorImportAfterPC2(t *testing.T) {
 	require.NoError(t, err)
 	ver, err := client.StateNetworkVersion(ctx, types.EmptyTSK)
 	require.NoError(t, err)
-	spt, err := lminer.PreferredSealProofTypeFromWindowPoStType(ver, mi.WindowPoStProofType)
+	spt, err := lminer.PreferredSealProofTypeFromWindowPoStType(ver, mi.WindowPoStProofType, false)
 	require.NoError(t, err)
 
 	ssize, err := spt.SectorSize()

@@ -169,6 +169,8 @@ func NewEnsemble(t *testing.T, opts ...EnsembleOpt) *Ensemble {
 		require.NoError(t, build.UseNetworkBundle("testing"))
 	}
 
+	build.EquivocationDelaySecs = 0
+
 	return n
 }
 
@@ -258,7 +260,7 @@ func (n *Ensemble) MinerEnroll(minerNode *TestMiner, full *TestFullNode, opts ..
 		)
 
 		// Will use 2KiB sectors by default (default value of sectorSize).
-		proofType, err := miner.SealProofTypeFromSectorSize(options.sectorSize, n.genesis.version)
+		proofType, err := miner.SealProofTypeFromSectorSize(options.sectorSize, n.genesis.version, false)
 		require.NoError(n.t, err)
 
 		// Create the preseal commitment.

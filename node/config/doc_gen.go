@@ -394,6 +394,35 @@ the database must already exist and be writeable. If a relative path is provided
 relative to the CWD (current working directory).`,
 		},
 	},
+	"FaultReporterConfig": []DocField{
+		{
+			Name: "EnableConsensusFaultReporter",
+			Type: "bool",
+
+			Comment: `EnableConsensusFaultReporter controls whether the node will monitor and
+report consensus faults. When enabled, the node will watch for malicious
+behaviors like double-mining and parent grinding, and submit reports to the
+network. This can earn reporter rewards, but is not guaranteed. Nodes should
+enable fault reporting with care, as it may increase resource usage, and may
+generate gas fees without earning rewards.`,
+		},
+		{
+			Name: "ConsensusFaultReporterDataDir",
+			Type: "string",
+
+			Comment: `ConsensusFaultReporterDataDir is the path where fault reporter state will be
+persisted. This directory should have adequate space and permissions for the
+node process.`,
+		},
+		{
+			Name: "ConsensusFaultReporterAddress",
+			Type: "string",
+
+			Comment: `ConsensusFaultReporterAddress is the wallet address used for submitting
+ReportConsensusFault messages. It will pay for gas fees, and receive any
+rewards. This address should have adequate funds to cover gas fees.`,
+		},
+	},
 	"FeeConfig": []DocField{
 		{
 			Name: "DefaultMaxFee",
@@ -464,6 +493,12 @@ Set to 0 to keep all mappings`,
 		{
 			Name: "Index",
 			Type: "IndexConfig",
+
+			Comment: ``,
+		},
+		{
+			Name: "FaultReporter",
+			Type: "FaultReporterConfig",
 
 			Comment: ``,
 		},
@@ -818,13 +853,10 @@ After changing this option, confirm that the new value works in your setup by in
 			Name: "MaxPartitionsPerPoStMessage",
 			Type: "int",
 
-			Comment: `Maximum number of partitions to prove in a single SubmitWindowPoSt messace. 0 = network limit (10 in nv16)
+			Comment: `Maximum number of partitions to prove in a single SubmitWindowPoSt messace. 0 = network limit (3 in nv21)
 
 A single partition may contain up to 2349 32GiB sectors, or 2300 64GiB sectors.
-
-The maximum number of sectors which can be proven in a single PoSt message is 25000 in network version 16, which
-means that a single message can prove at most 10 partitions
-
+//
 Note that setting this value lower may result in less efficient gas use - more messages will be sent,
 to prove each deadline, resulting in more total gas use (but each message will have lower gas limit)
 
@@ -1107,15 +1139,7 @@ required to have expiration of at least the soonest-ending deal`,
 			Name: "MinTargetUpgradeSectorExpiration",
 			Type: "uint64",
 
-			Comment: `When set to a non-zero value, minimum number of epochs until sector expiration above which upgrade candidates will
-be selected based on lowest initial pledge.
-
-Target sector expiration is calculated by looking at the input deal queue, sorting it by deal expiration, and
-selecting N deals from the queue up to sector size. The target expiration will be Nth deal end epoch, or in case
-where there weren't enough deals to fill a sector, DealMaxDuration (540 days = 1555200 epochs)
-
-Setting this to a high value (for example to maximum deal duration - 1555200) will disable selection based on
-initial pledge - upgrade sectors will always be chosen based on longest expiration`,
+			Comment: `DEPRECATED: Target expiration is no longer used`,
 		},
 		{
 			Name: "CommittedCapacitySectorLifetime",
@@ -1123,7 +1147,7 @@ initial pledge - upgrade sectors will always be chosen based on longest expirati
 
 			Comment: `CommittedCapacitySectorLifetime is the duration a Committed Capacity (CC) sector will
 live before it must be extended or converted into sector containing deals before it is
-terminated. Value must be between 180-540 days inclusive`,
+terminated. Value must be between 180-1278 days (1278 in nv21, 540 before nv21).`,
 		},
 		{
 			Name: "WaitDealsDelay",
@@ -1178,12 +1202,6 @@ This is useful for forcing all deals to be assigned as snap deals to sectors mar
 			Comment: `Don't send collateral with messages even if there is no available balance in the miner actor`,
 		},
 		{
-			Name: "BatchPreCommits",
-			Type: "bool",
-
-			Comment: `enable / disable precommit batching (takes effect after nv13)`,
-		},
-		{
 			Name: "MaxPreCommitBatch",
 			Type: "int",
 
@@ -1236,7 +1254,8 @@ This is useful for forcing all deals to be assigned as snap deals to sectors mar
 			Type: "types.FIL",
 
 			Comment: `network BaseFee below which to stop doing precommit batching, instead
-sending precommit messages to the chain individually`,
+sending precommit messages to the chain individually. When the basefee is
+below this threshold, precommit messages will get sent out immediately.`,
 		},
 		{
 			Name: "AggregateAboveBaseFee",
@@ -1272,6 +1291,12 @@ Submitting a smaller number of prove commits per epoch would reduce the possibil
 			Type: "Duration",
 
 			Comment: ``,
+		},
+		{
+			Name: "UseSyntheticPoRep",
+			Type: "bool",
+
+			Comment: `UseSyntheticPoRep, when set to true, will reduce the amount of cache data held on disk after the completion of PreCommit 2 to 11GiB.`,
 		},
 	},
 	"Splitstore": []DocField{

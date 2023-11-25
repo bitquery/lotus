@@ -21,6 +21,7 @@ func CreateEthRPCAliases(as apitypes.Aliaser) {
 	as.AliasMethod("eth_getStorageAt", "Filecoin.EthGetStorageAt")
 	as.AliasMethod("eth_getBalance", "Filecoin.EthGetBalance")
 	as.AliasMethod("eth_chainId", "Filecoin.EthChainId")
+	as.AliasMethod("eth_syncing", "Filecoin.EthSyncing")
 	as.AliasMethod("eth_feeHistory", "Filecoin.EthFeeHistory")
 	as.AliasMethod("eth_protocolVersion", "Filecoin.EthProtocolVersion")
 	as.AliasMethod("eth_maxPriorityFeePerGas", "Filecoin.EthMaxPriorityFeePerGas")
@@ -38,6 +39,9 @@ func CreateEthRPCAliases(as apitypes.Aliaser) {
 	as.AliasMethod("eth_uninstallFilter", "Filecoin.EthUninstallFilter")
 	as.AliasMethod("eth_subscribe", "Filecoin.EthSubscribe")
 	as.AliasMethod("eth_unsubscribe", "Filecoin.EthUnsubscribe")
+
+	as.AliasMethod("trace_block", "Filecoin.EthTraceBlock")
+	as.AliasMethod("trace_replayBlockTransactions", "Filecoin.EthTraceReplayBlockTransactions")
 
 	as.AliasMethod("net_version", "Filecoin.NetVersion")
 	as.AliasMethod("net_listening", "Filecoin.NetListening")

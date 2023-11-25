@@ -103,6 +103,9 @@
   * [EthProtocolVersion](#EthProtocolVersion)
   * [EthSendRawTransaction](#EthSendRawTransaction)
   * [EthSubscribe](#EthSubscribe)
+  * [EthSyncing](#EthSyncing)
+  * [EthTraceBlock](#EthTraceBlock)
+  * [EthTraceReplayBlockTransactions](#EthTraceReplayBlockTransactions)
   * [EthUninstallFilter](#EthUninstallFilter)
   * [EthUnsubscribe](#EthUnsubscribe)
 * [Filecoin](#Filecoin)
@@ -234,6 +237,8 @@
   * [StateGetClaim](#StateGetClaim)
   * [StateGetClaims](#StateGetClaims)
   * [StateGetNetworkParams](#StateGetNetworkParams)
+  * [StateGetRandomnessDigestFromBeacon](#StateGetRandomnessDigestFromBeacon)
+  * [StateGetRandomnessDigestFromTickets](#StateGetRandomnessDigestFromTickets)
   * [StateGetRandomnessFromBeacon](#StateGetRandomnessFromBeacon)
   * [StateGetRandomnessFromTickets](#StateGetRandomnessFromTickets)
   * [StateListActors](#StateListActors)
@@ -2598,7 +2603,7 @@ Polling method for a filter, returns event logs which occurred since last poll.
 (requires write perm since timestamp of last filter execution will be written)
 
 
-Perms: write
+Perms: read
 
 Inputs:
 ```json
@@ -2619,7 +2624,7 @@ Returns event logs matching filter with given id.
 (requires write perm since timestamp of last filter execution will be written)
 
 
-Perms: write
+Perms: read
 
 Inputs:
 ```json
@@ -2990,7 +2995,7 @@ Response: `"0x0"`
 Installs a persistent filter to notify when a new block arrives.
 
 
-Perms: write
+Perms: read
 
 Inputs: `null`
 
@@ -3000,7 +3005,7 @@ Response: `"0x37690cfec6c1bf4c3b9288c7a5d783e98731e90b0a4c177c2a374c7a9427355e"`
 Installs a persistent filter based on given filter spec.
 
 
-Perms: write
+Perms: read
 
 Inputs:
 ```json
@@ -3021,7 +3026,7 @@ Response: `"0x37690cfec6c1bf4c3b9288c7a5d783e98731e90b0a4c177c2a374c7a9427355e"`
 Installs a persistent filter to notify when new messages arrive in the message pool.
 
 
-Perms: write
+Perms: read
 
 Inputs: `null`
 
@@ -3060,7 +3065,7 @@ params contains additional parameters used with the log event type
 The client will receive a stream of EthSubscriptionResponse values until EthUnsubscribe is called.
 
 
-Perms: write
+Perms: read
 
 Inputs:
 ```json
@@ -3071,11 +3076,113 @@ Inputs:
 
 Response: `"0x37690cfec6c1bf4c3b9288c7a5d783e98731e90b0a4c177c2a374c7a9427355e"`
 
+### EthSyncing
+
+
+Perms: read
+
+Inputs: `null`
+
+Response: `false`
+
+### EthTraceBlock
+TraceAPI related methods
+
+Returns traces created at given block
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "string value"
+]
+```
+
+Response:
+```json
+[
+  {
+    "action": {
+      "callType": "string value",
+      "from": "0x5cbeecf99d3fdb3f25e309cc264f240bb0664031",
+      "to": "0x5cbeecf99d3fdb3f25e309cc264f240bb0664031",
+      "gas": "0x5",
+      "input": "0x07",
+      "value": "0x0"
+    },
+    "result": {
+      "gasUsed": "0x5",
+      "output": "0x07"
+    },
+    "subtraces": 123,
+    "traceAddress": [
+      123
+    ],
+    "Type": "string value",
+    "blockHash": "0x37690cfec6c1bf4c3b9288c7a5d783e98731e90b0a4c177c2a374c7a9427355e",
+    "blockNumber": 9,
+    "transactionHash": "0x37690cfec6c1bf4c3b9288c7a5d783e98731e90b0a4c177c2a374c7a9427355e",
+    "transactionPosition": 123
+  }
+]
+```
+
+### EthTraceReplayBlockTransactions
+Replays all transactions in a block returning the requested traces for each transaction
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "string value",
+  [
+    "string value"
+  ]
+]
+```
+
+Response:
+```json
+[
+  {
+    "output": "0x07",
+    "stateDiff": "string value",
+    "trace": [
+      {
+        "action": {
+          "callType": "string value",
+          "from": "0x5cbeecf99d3fdb3f25e309cc264f240bb0664031",
+          "to": "0x5cbeecf99d3fdb3f25e309cc264f240bb0664031",
+          "gas": "0x5",
+          "input": "0x07",
+          "value": "0x0"
+        },
+        "result": {
+          "gasUsed": "0x5",
+          "output": "0x07"
+        },
+        "subtraces": 123,
+        "traceAddress": [
+          123
+        ],
+        "Type": "string value"
+      }
+    ],
+    "transactionHash": "0x37690cfec6c1bf4c3b9288c7a5d783e98731e90b0a4c177c2a374c7a9427355e",
+    "vmTrace": "string value"
+  }
+]
+```
+
 ### EthUninstallFilter
 Uninstalls a filter with given id.
 
 
-Perms: write
+Perms: read
 
 Inputs:
 ```json
@@ -3090,7 +3197,7 @@ Response: `true`
 Unsubscribe from a websocket subscription
 
 
-Perms: write
+Perms: read
 
 Inputs:
 ```json
@@ -5566,7 +5673,7 @@ Inputs:
 Response:
 ```json
 {
-  "Channel": "\u003cempty\u003e",
+  "Channel": "f01234",
   "From": "f01234",
   "To": "f01234",
   "ConfirmedAmt": "0",
@@ -5597,7 +5704,7 @@ Inputs:
 Response:
 ```json
 {
-  "Channel": "\u003cempty\u003e",
+  "Channel": "f01234",
   "From": "f01234",
   "To": "f01234",
   "ConfirmedAmt": "0",
@@ -6156,7 +6263,7 @@ Perms: read
 Inputs:
 ```json
 [
-  20
+  21
 ]
 ```
 
@@ -6171,7 +6278,7 @@ Perms: read
 Inputs:
 ```json
 [
-  20
+  21
 ]
 ```
 
@@ -6300,7 +6407,12 @@ Response:
       "Value": "0",
       "Method": 1,
       "Params": "Ynl0ZSBhcnJheQ==",
-      "ParamsCodec": 42
+      "ParamsCodec": 42,
+      "GasLimit": 42,
+      "ReadOnly": true,
+      "CodeCid": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      }
     },
     "MsgRct": {
       "ExitCode": 0,
@@ -6324,7 +6436,12 @@ Response:
           "Value": "0",
           "Method": 1,
           "Params": "Ynl0ZSBhcnJheQ==",
-          "ParamsCodec": 42
+          "ParamsCodec": 42,
+          "GasLimit": 42,
+          "ReadOnly": true,
+          "CodeCid": {
+            "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+          }
         },
         "MsgRct": {
           "ExitCode": 0,
@@ -6380,7 +6497,7 @@ Response:
     },
     "Nonce": 42,
     "Balance": "0",
-    "Address": "\u003cempty\u003e"
+    "Address": "f01234"
   }
 }
 ```
@@ -6530,7 +6647,12 @@ Response:
           "Value": "0",
           "Method": 1,
           "Params": "Ynl0ZSBhcnJheQ==",
-          "ParamsCodec": 42
+          "ParamsCodec": 42,
+          "GasLimit": 42,
+          "ReadOnly": true,
+          "CodeCid": {
+            "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+          }
         },
         "MsgRct": {
           "ExitCode": 0,
@@ -6554,7 +6676,12 @@ Response:
               "Value": "0",
               "Method": 1,
               "Params": "Ynl0ZSBhcnJheQ==",
-              "ParamsCodec": 42
+              "ParamsCodec": 42,
+              "GasLimit": 42,
+              "ReadOnly": true,
+              "CodeCid": {
+                "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+              }
             },
             "MsgRct": {
               "ExitCode": 0,
@@ -6720,7 +6847,7 @@ Response:
   },
   "Nonce": 42,
   "Balance": "0",
-  "Address": "\u003cempty\u003e"
+  "Address": "f01234"
 }
 ```
 
@@ -6932,7 +7059,6 @@ Response:
     "UpgradeRefuelHeight": 10101,
     "UpgradeTapeHeight": 10101,
     "UpgradeKumquatHeight": 10101,
-    "UpgradePriceListOopsHeight": 10101,
     "BreezeGasTampingDuration": 10101,
     "UpgradeCalicoHeight": 10101,
     "UpgradePersianHeight": 10101,
@@ -6948,10 +7074,58 @@ Response:
     "UpgradeSharkHeight": 10101,
     "UpgradeHyggeHeight": 10101,
     "UpgradeLightningHeight": 10101,
-    "UpgradeThunderHeight": 10101
-  }
+    "UpgradeThunderHeight": 10101,
+    "UpgradeWatermelonHeight": 10101
+  },
+  "Eip155ChainID": 123
 }
 ```
+
+### StateGetRandomnessDigestFromBeacon
+StateGetRandomnessDigestFromBeacon is used to sample the beacon for randomness.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  10101,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response: `"Bw=="`
+
+### StateGetRandomnessDigestFromTickets
+StateGetRandomnessDigestFromTickets. is used to sample the chain for randomness.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  10101,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response: `"Bw=="`
 
 ### StateGetRandomnessFromBeacon
 StateGetRandomnessFromBeacon is used to sample the beacon for randomness.
@@ -7496,6 +7670,7 @@ Response:
   "SectorSize": 34359738368,
   "WindowPoStPartitionSectors": 42,
   "ConsensusFaultElapsed": 10101,
+  "PendingOwnerAddress": "f01234",
   "Beneficiary": "f01234",
   "BeneficiaryTerm": {
     "Quota": "0",
@@ -7880,7 +8055,7 @@ Inputs:
 ]
 ```
 
-Response: `20`
+Response: `21`
 
 ### StateReadState
 StateReadState returns the indicated actor's state.
@@ -8001,7 +8176,12 @@ Response:
       "Value": "0",
       "Method": 1,
       "Params": "Ynl0ZSBhcnJheQ==",
-      "ParamsCodec": 42
+      "ParamsCodec": 42,
+      "GasLimit": 42,
+      "ReadOnly": true,
+      "CodeCid": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      }
     },
     "MsgRct": {
       "ExitCode": 0,
@@ -8025,7 +8205,12 @@ Response:
           "Value": "0",
           "Method": 1,
           "Params": "Ynl0ZSBhcnJheQ==",
-          "ParamsCodec": 42
+          "ParamsCodec": 42,
+          "GasLimit": 42,
+          "ReadOnly": true,
+          "CodeCid": {
+            "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+          }
         },
         "MsgRct": {
           "ExitCode": 0,

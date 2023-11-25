@@ -1,4 +1,4 @@
-FROM golang:1.20.8-buster as builder
+FROM golang:1.20.8-bullseye as builder
 MAINTAINER BitQuery
 
 RUN apt-get update && apt-get install -y ca-certificates build-essential clang ocl-icd-opencl-dev ocl-icd-libopencl1 jq libhwloc-dev
@@ -41,7 +41,6 @@ ARG GOFLAGS=""
 RUN make buildall
 
 
-
 FROM ubuntu:20.04 AS base
 MAINTAINER BitQuery
 
@@ -55,6 +54,15 @@ COPY --from=builder /lib/*/libdl.so.2 \
    /usr/lib/*/libhwloc.so.5 \
    /usr/lib/*/libOpenCL.so.1 \
    /lib/
+COPY --from=builder /etc/ssl/certs                           /etc/ssl/certs
+COPY --from=builder /lib/*/libdl.so.2         /lib/
+COPY --from=builder /lib/*/librt.so.1         /lib/
+COPY --from=builder /lib/*/libgcc_s.so.1      /lib/
+COPY --from=builder /lib/*/libutil.so.1       /lib/
+COPY --from=builder /usr/lib/*/libltdl.so.7   /lib/
+COPY --from=builder /usr/lib/*/libnuma.so.1   /lib/
+COPY --from=builder /usr/lib/*/libhwloc.so.*  /lib/
+COPY --from=builder /usr/lib/*/libOpenCL.so.1 /lib/
 
 RUN useradd -r -u 532 -U fc \
  && mkdir -p /etc/OpenCL/vendors \

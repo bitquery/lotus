@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"runtime/pprof"
 
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/urfave/cli/v2"
@@ -21,6 +24,7 @@ func main() {
 	local := []*cli.Command{
 		addressCmd,
 		statActorCmd,
+		statSnapshotCmd,
 		statObjCmd,
 		base64Cmd,
 		base32Cmd,
@@ -84,9 +88,10 @@ func main() {
 		invariantsCmd,
 		gasTraceCmd,
 		replayOfflineCmd,
-		msgindexCmd,
+		indexesCmd,
 		FevmAnalyticsCmd,
 		mismatchesCmd,
+		blockCmd,
 	}
 
 	app := &cli.App{
@@ -112,13 +117,47 @@ func main() {
 				Name:  "log-level",
 				Value: "info",
 			},
+			&cli.StringFlag{
+				Name:  "pprof",
+				Usage: "specify name of file for writing cpu profile to",
+			},
 		},
 		Before: func(cctx *cli.Context) error {
+			if prof := cctx.String("pprof"); prof != "" {
+				profile, err := os.Create(prof)
+				if err != nil {
+					return err
+				}
+
+				if err := pprof.StartCPUProfile(profile); err != nil {
+					return err
+				}
+			}
+
 			return logging.SetLogLevel("lotus-shed", cctx.String("log-level"))
+		},
+		After: func(cctx *cli.Context) error {
+			if prof := cctx.String("pprof"); prof != "" {
+				pprof.StopCPUProfile()
+			}
+			return nil
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	// terminate early on ctrl+c
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-c
+		cancel()
+		fmt.Println("Received interrupt, shutting down... Press CTRL+C again to force shutdown")
+		<-c
+		fmt.Println("Forcing stop")
+		os.Exit(1)
+	}()
+
+	if err := app.RunContext(ctx, os.Args); err != nil {
 		log.Errorf("%+v", err)
 		os.Exit(1)
 		return
