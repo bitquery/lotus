@@ -255,7 +255,7 @@ type FullNodeMethods struct {
 
 	EthChainId func(p0 context.Context) (ethtypes.EthUint64, error) `perm:"read"`
 
-	EthEstimateGas func(p0 context.Context, p1 ethtypes.EthCall) (ethtypes.EthUint64, error) `perm:"read"`
+	EthEstimateGas func(p0 context.Context, p1 jsonrpc.RawParams) (ethtypes.EthUint64, error) `perm:"read"`
 
 	EthFeeHistory func(p0 context.Context, p1 jsonrpc.RawParams) (ethtypes.EthFeeHistory, error) `perm:"read"`
 
@@ -687,7 +687,7 @@ type GatewayMethods struct {
 
 	EthChainId func(p0 context.Context) (ethtypes.EthUint64, error) ``
 
-	EthEstimateGas func(p0 context.Context, p1 ethtypes.EthCall) (ethtypes.EthUint64, error) ``
+	EthEstimateGas func(p0 context.Context, p1 jsonrpc.RawParams) (ethtypes.EthUint64, error) ``
 
 	EthFeeHistory func(p0 context.Context, p1 jsonrpc.RawParams) (ethtypes.EthFeeHistory, error) ``
 
@@ -839,6 +839,19 @@ type GatewayMethods struct {
 }
 
 type GatewayStub struct {
+}
+
+type LotusProviderStruct struct {
+	Internal LotusProviderMethods
+}
+
+type LotusProviderMethods struct {
+	Shutdown func(p0 context.Context) error `perm:"admin"`
+
+	Version func(p0 context.Context) (Version, error) `perm:"admin"`
+}
+
+type LotusProviderStub struct {
 }
 
 type NetStruct struct {
@@ -2144,14 +2157,14 @@ func (s *FullNodeStub) EthChainId(p0 context.Context) (ethtypes.EthUint64, error
 	return *new(ethtypes.EthUint64), ErrNotSupported
 }
 
-func (s *FullNodeStruct) EthEstimateGas(p0 context.Context, p1 ethtypes.EthCall) (ethtypes.EthUint64, error) {
+func (s *FullNodeStruct) EthEstimateGas(p0 context.Context, p1 jsonrpc.RawParams) (ethtypes.EthUint64, error) {
 	if s.Internal.EthEstimateGas == nil {
 		return *new(ethtypes.EthUint64), ErrNotSupported
 	}
 	return s.Internal.EthEstimateGas(p0, p1)
 }
 
-func (s *FullNodeStub) EthEstimateGas(p0 context.Context, p1 ethtypes.EthCall) (ethtypes.EthUint64, error) {
+func (s *FullNodeStub) EthEstimateGas(p0 context.Context, p1 jsonrpc.RawParams) (ethtypes.EthUint64, error) {
 	return *new(ethtypes.EthUint64), ErrNotSupported
 }
 
@@ -4431,14 +4444,14 @@ func (s *GatewayStub) EthChainId(p0 context.Context) (ethtypes.EthUint64, error)
 	return *new(ethtypes.EthUint64), ErrNotSupported
 }
 
-func (s *GatewayStruct) EthEstimateGas(p0 context.Context, p1 ethtypes.EthCall) (ethtypes.EthUint64, error) {
+func (s *GatewayStruct) EthEstimateGas(p0 context.Context, p1 jsonrpc.RawParams) (ethtypes.EthUint64, error) {
 	if s.Internal.EthEstimateGas == nil {
 		return *new(ethtypes.EthUint64), ErrNotSupported
 	}
 	return s.Internal.EthEstimateGas(p0, p1)
 }
 
-func (s *GatewayStub) EthEstimateGas(p0 context.Context, p1 ethtypes.EthCall) (ethtypes.EthUint64, error) {
+func (s *GatewayStub) EthEstimateGas(p0 context.Context, p1 jsonrpc.RawParams) (ethtypes.EthUint64, error) {
 	return *new(ethtypes.EthUint64), ErrNotSupported
 }
 
@@ -5247,6 +5260,28 @@ func (s *GatewayStruct) Web3ClientVersion(p0 context.Context) (string, error) {
 
 func (s *GatewayStub) Web3ClientVersion(p0 context.Context) (string, error) {
 	return "", ErrNotSupported
+}
+
+func (s *LotusProviderStruct) Shutdown(p0 context.Context) error {
+	if s.Internal.Shutdown == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.Shutdown(p0)
+}
+
+func (s *LotusProviderStub) Shutdown(p0 context.Context) error {
+	return ErrNotSupported
+}
+
+func (s *LotusProviderStruct) Version(p0 context.Context) (Version, error) {
+	if s.Internal.Version == nil {
+		return *new(Version), ErrNotSupported
+	}
+	return s.Internal.Version(p0)
+}
+
+func (s *LotusProviderStub) Version(p0 context.Context) (Version, error) {
+	return *new(Version), ErrNotSupported
 }
 
 func (s *NetStruct) ID(p0 context.Context) (peer.ID, error) {
@@ -7477,6 +7512,7 @@ var _ CommonNet = new(CommonNetStruct)
 var _ EthSubscriber = new(EthSubscriberStruct)
 var _ FullNode = new(FullNodeStruct)
 var _ Gateway = new(GatewayStruct)
+var _ LotusProvider = new(LotusProviderStruct)
 var _ Net = new(NetStruct)
 var _ Signable = new(SignableStruct)
 var _ StorageMiner = new(StorageMinerStruct)
