@@ -42,6 +42,9 @@ services:
       - NODE_TAG=${LC_COMPOSE_NODE_TAG}
       - NODE_NETWORK=${LC_COMPOSE_NETWORK}
       - NODE_PRIORITY=${LC_COMPOSE_PRIORITY}
+      - BACKFILL_MODE=${LC_COMPOSE_BACKFILL_MODE}
+      - RANGESTART=${LC_COMPOSE_RANGESTART}
+      - RANGEEND=${LC_COMPOSE_RANGEEND}
     ports:
       - ${LC_COMPOSE_IPADDR}:${LC_COMPOSE_EXPORTER_PORT}:9228
     <<: [*common-logging, *common-network, *common-dns, *common-restart]

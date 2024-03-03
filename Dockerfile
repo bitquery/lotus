@@ -1,7 +1,7 @@
 FROM golang:1.19.7-buster as builder
 MAINTAINER BitQuery
 
-RUN apt-get update && apt-get install -y ca-certificates build-essential clang ocl-icd-opencl-dev ocl-icd-libopencl1 jq libhwloc-dev
+RUN apt-get update && apt-get install -y ca-certificates build-essential clang ocl-icd-opencl-dev ocl-icd-libopencl1 jq htmlq curl zstd libhwloc-dev
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
@@ -67,6 +67,10 @@ MAINTAINER BitQuery
 
 COPY --from=builder /opt/filecoin/lotus /usr/local/bin/
 COPY --from=builder /opt/filecoin/lotus-shed /usr/local/bin/
+COPY --from=builder /usr/bin/htmlq /usr/bin/htmlq
+COPY --from=builder /usr/bin/curl /usr/bin/curl
+COPY --from=builder /usr/bin/zstd /usr/bin/zstd
+ 
 COPY scripts/docker-lotus-entrypoint.sh /
 
 ARG DOCKER_LOTUS_IMPORT_SNAPSHOT https://snapshots.mainnet.filops.net/minimal/latest
