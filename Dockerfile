@@ -24,7 +24,8 @@ RUN set -eux; \
     chmod -R a+w $RUSTUP_HOME $CARGO_HOME; \
     rustup --version; \
     cargo --version; \
-    rustc --version;
+    rustc --version; \
+    wget -qO- https://github.com/mgdm/htmlq/releases/download/v0.4.0/htmlq-x86_64-linux.tar.gz | tar xvz -C /usr/bin
 
 COPY ./ /opt/filecoin
 WORKDIR /opt/filecoin
@@ -67,7 +68,7 @@ MAINTAINER BitQuery
 
 COPY --from=builder /opt/filecoin/lotus /usr/local/bin/
 COPY --from=builder /opt/filecoin/lotus-shed /usr/local/bin/
-RUN  wget -qO- https://github.com/mgdm/htmlq/releases/download/v0.4.0/htmlq-x86_64-linux.tar.gz | tar xvz -C /usr/bin 
+COPY --from=builder /usr/bin/htmlq /usr/bin/htmlq
 COPY --from=builder /usr/bin/curl /usr/bin/curl
 COPY --from=builder /usr/bin/zstd /usr/bin/zstd
  
