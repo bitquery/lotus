@@ -1,7 +1,7 @@
 FROM golang:1.19.7-buster as builder
 MAINTAINER BitQuery
 
-RUN apt-get update && apt-get install -y ca-certificates build-essential clang ocl-icd-opencl-dev ocl-icd-libopencl1 jq htmlq curl zstd libhwloc-dev
+RUN apt-get update && apt-get install -y ca-certificates build-essential clang ocl-icd-opencl-dev ocl-icd-libopencl1 jq curl zstd libhwloc-dev
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
@@ -67,7 +67,7 @@ MAINTAINER BitQuery
 
 COPY --from=builder /opt/filecoin/lotus /usr/local/bin/
 COPY --from=builder /opt/filecoin/lotus-shed /usr/local/bin/
-COPY --from=builder /usr/bin/htmlq /usr/bin/htmlq
+RUN  wget -qO- https://github.com/mgdm/htmlq/releases/download/v0.4.0/htmlq-x86_64-linux.tar.gz | tar xvz -C /usr/bin 
 COPY --from=builder /usr/bin/curl /usr/bin/curl
 COPY --from=builder /usr/bin/zstd /usr/bin/zstd
  
