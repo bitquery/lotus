@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if [ ! -z $DOCKER_LOTUS_IMPORT_SNAPSHOT ] && [ $BACKFILL_MODE <> "true"  ]; then
+if [ ! -z $DOCKER_LOTUS_IMPORT_SNAPSHOT ] && [ $BACKFILL_MODE -ne "true"  ]; then
 	GATE="$LOTUS_PATH"/date_initialized
 	# Don't init if already initialized.
 	if [ ! -f "$GATE" ]; then
@@ -16,7 +16,7 @@ if [ ! -z $DOCKER_LOTUS_IMPORT_WALLET ]; then
 	/usr/local/bin/lotus-shed keyinfo import "$DOCKER_LOTUS_IMPORT_WALLET"
 fi
 
-if [ $BACKFILL_MODE == "true" ]; then
+if [ $BACKFILL_MODE -eq "true" ]; then
      
   todoarr=()
 
