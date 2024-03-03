@@ -71,7 +71,7 @@ COPY --from=builder /opt/filecoin/lotus-shed /usr/local/bin/
 COPY --from=builder /usr/bin/htmlq /usr/bin/htmlq
 COPY --from=builder /usr/bin/curl /usr/bin/curl
 COPY --from=builder /usr/lib/libcurl.so.4 /usr/lib/libcurl.so.4
-COPY --from-builder /usr/bin/wget /usr/bin/wget
+COPY --from=builder /usr/bin/wget /usr/bin/wget
 COPY --from=builder /usr/bin/zstd /usr/bin/zstd
  
 COPY scripts/docker-lotus-entrypoint.sh /
