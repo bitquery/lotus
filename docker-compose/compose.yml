@@ -19,10 +19,14 @@ x-common-logging: &common-logging
 
 services:
   node:
-    image: ${LC_COMPOSE_IMAGE}:${LC_COMPOSE_IMAGE_TAG}
+#    image: ${LC_COMPOSE_IMAGE}:${LC_COMPOSE_IMAGE_TAG}
     command: [ 'daemon' ]
     environment:
       - DOCKER_LOTUS_IMPORT_SNAPSHOT=${LC_COMPOSE_SNAPSHOT_URL}
+      - BACKFILL_MODE=${LC_COMPOSE_BACKFILL_MODE}
+      - RANGESTART=${LC_COMPOSE_RANGESTART}
+      - RANGEEND=${LC_COMPOSE_RANGEEND}
+
     ports:
       - ${LC_COMPOSE_IPADDR}:${LC_COMPOSE_RPC_PORT}:1234
     shm_size: '4gb'
@@ -42,9 +46,6 @@ services:
       - NODE_TAG=${LC_COMPOSE_NODE_TAG}
       - NODE_NETWORK=${LC_COMPOSE_NETWORK}
       - NODE_PRIORITY=${LC_COMPOSE_PRIORITY}
-      - BACKFILL_MODE=${LC_COMPOSE_BACKFILL_MODE}
-      - RANGESTART=${LC_COMPOSE_RANGESTART}
-      - RANGEEND=${LC_COMPOSE_RANGEEND}
     ports:
       - ${LC_COMPOSE_IPADDR}:${LC_COMPOSE_EXPORTER_PORT}:9228
     <<: [*common-logging, *common-network, *common-dns, *common-restart]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if [ ! -z $DOCKER_LOTUS_IMPORT_SNAPSHOT ] && [[ $BACKFILL_MODE -ne "true" ]]; then
+if [ ! -z $DOCKER_LOTUS_IMPORT_SNAPSHOT ] && ! $BACKFILL_MODE ; then
 	GATE="$LOTUS_PATH"/date_initialized
 	# Don't init if already initialized.
 	if [ ! -f "$GATE" ]; then
@@ -16,7 +16,7 @@ if [ ! -z $DOCKER_LOTUS_IMPORT_WALLET ]; then
 	/usr/local/bin/lotus-shed keyinfo import "$DOCKER_LOTUS_IMPORT_WALLET"
 fi
 
-if [[ $BACKFILL_MODE -eq "true" ]]; then
+if  $BACKFILL_MODE && [ ! -f "$GATE" ]; then
      
   todoarr=()
 
@@ -51,11 +51,14 @@ if [[ $BACKFILL_MODE -eq "true" ]]; then
 
   todoarr+=("https://forest-archive.chainsafe.dev/latest/mainnet/")
 
+  mkdir /var/lib/lotus/process
+  cd /var/lib/lotus/process
+
   for value in "${todoarr[@]}"
   do
     echo "==================================    Processing $value"
     echo
-    wget -c $value -O processfile.zst
+    wget -q -c $value -O processfile.zst
     zstd -d processfile.zst
     rm -rf processfile.zst
     /usr/local/bin/lotus daemon --halt-after-import --import-snapshot processfile
@@ -68,5 +71,6 @@ if [[ $BACKFILL_MODE -eq "true" ]]; then
 
 fi
 
+cd /
 
 exec /usr/local/bin/lotus $@
