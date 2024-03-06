@@ -19,7 +19,7 @@ x-common-logging: &common-logging
 
 services:
   node:
-#    image: ${LC_COMPOSE_IMAGE}:${LC_COMPOSE_IMAGE_TAG}
+    image: ${LC_COMPOSE_IMAGE}:${LC_COMPOSE_IMAGE_TAG}
     command: [ 'daemon' ]
     environment:
       - DOCKER_LOTUS_IMPORT_SNAPSHOT=${LC_COMPOSE_SNAPSHOT_URL}
