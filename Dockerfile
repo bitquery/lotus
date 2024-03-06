@@ -24,8 +24,7 @@ RUN set -eux; \
     chmod -R a+w $RUSTUP_HOME $CARGO_HOME; \
     rustup --version; \
     cargo --version; \
-    rustc --version; \
-    wget -qO- https://github.com/mgdm/htmlq/releases/download/v0.4.0/htmlq-x86_64-linux.tar.gz | tar xvz -C /usr/bin
+    rustc --version
 
 COPY ./ /opt/filecoin
 WORKDIR /opt/filecoin
@@ -57,9 +56,12 @@ COPY --from=builder /lib/*/libdl.so.2 \
    /usr/lib/*/libOpenCL.so.1 \
    /lib/
 
+RUN apt-get update && apt-get install -y zstd curl wget tar
+
 RUN useradd -r -u 532 -U fc \
  && mkdir -p /etc/OpenCL/vendors \
- && echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
+ && echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd \
+ && wget -qO- https://github.com/mgdm/htmlq/releases/download/v0.4.0/htmlq-x86_64-linux.tar.gz | tar xvz -C /usr/bin
 
 
 
@@ -68,11 +70,6 @@ MAINTAINER BitQuery
 
 COPY --from=builder /opt/filecoin/lotus /usr/local/bin/
 COPY --from=builder /opt/filecoin/lotus-shed /usr/local/bin/
-COPY --from=builder /usr/bin/htmlq /usr/bin/htmlq
-COPY --from=builder /usr/bin/curl /usr/bin/curl
-COPY --from=builder /usr/lib/libcurl* /usr/lib/
-COPY --from=builder /usr/bin/wget /usr/bin/wget
-COPY --from=builder /usr/bin/zstd /usr/bin/zstd
  
 COPY scripts/docker-lotus-entrypoint.sh /
 
