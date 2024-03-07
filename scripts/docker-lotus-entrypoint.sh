@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
+GATE="$LOTUS_PATH"/date_initialized
+
 if [ ! -z $DOCKER_LOTUS_IMPORT_SNAPSHOT ] && ! $BACKFILL_MODE ; then
-	GATE="$LOTUS_PATH"/date_initialized
 	# Don't init if already initialized.
 	if [ ! -f "$GATE" ]; then
 		echo importing minimal snapshot
@@ -15,6 +16,7 @@ fi
 if [ ! -z $DOCKER_LOTUS_IMPORT_WALLET ]; then
 	/usr/local/bin/lotus-shed keyinfo import "$DOCKER_LOTUS_IMPORT_WALLET"
 fi
+
 
 if  $BACKFILL_MODE && [ ! -f "$GATE" ]; then
      
@@ -53,6 +55,7 @@ if  $BACKFILL_MODE && [ ! -f "$GATE" ]; then
 
   mkdir /var/lib/lotus/process
   cd /var/lib/lotus/process
+  rm -rf processfile
 
   for value in "${todoarr[@]}"
   do
