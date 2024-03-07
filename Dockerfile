@@ -67,8 +67,8 @@ COPY --from=builder /usr/lib/*/libOpenCL.so.1 /lib/
 RUN useradd -r -u 532 -U fc \
  && mkdir -p /etc/OpenCL/vendors \
  && echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd \
- && wget -qO- https://github.com/mgdm/htmlq/releases/download/v0.4.0/htmlq-x86_64-linux.tar.gz | tar xvz -C /usr/bin \
- && apt-get update && apt-get install -y zstd curl wget tar
+ && apt-get update && apt-get install -y zstd curl wget tar \ 
+ && wget -qO- https://github.com/mgdm/htmlq/releases/download/v0.4.0/htmlq-x86_64-linux.tar.gz | tar xvz -C /usr/bin 
 
 FROM base AS lotus
 MAINTAINER BitQuery
