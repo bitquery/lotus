@@ -58,7 +58,7 @@ if  $BACKFILL_MODE && [ ! -f "$GATE" ]; then
   do
     echo "==================================    Processing $value"
     echo
-    wget -q -c $value -O processfile.zst
+    wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q -c $value -O processfile.zst
     zstd -d processfile.zst
     rm -rf processfile.zst
     /usr/local/bin/lotus daemon --halt-after-import --import-snapshot processfile
