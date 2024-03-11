@@ -41,7 +41,7 @@ if  $BACKFILL_MODE && [ ! -f "$GATE" ]; then
 
   let liteindex=$RANGESTART/30000*30000 
 
-  todoarr+=("${lites[$liteindex]}")
+  lite=("${lites[$liteindex]}")
 
   diffindex=$liteindex
 
@@ -53,12 +53,15 @@ if  $BACKFILL_MODE && [ ! -f "$GATE" ]; then
 
   todoarr+=("https://forest-archive.chainsafe.dev/latest/mainnet/")
 
+  echo "=================================== first processing lite snap  $lite"
+    mkdir /var/lib/lotus/process
+    cd /var/lib/lotus/process
+    wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q -c $lite -O processfile.car.zst
+    zstd -d processfile.car.zst
+    rm -rf processfile.car.zst
+    /usr/local/bin/lotus --halt-after-import --import-snapshot processfile.car 
 
-  /usr/local/bin/lotus --halt-after-import --import-snapshot 
-
-  mkdir /var/lib/lotus/process
-  cd /var/lib/lotus/process
-  rm -rf processfile
+     rm -rf processfile
 
   for value in "${todoarr[@]}"
   do
