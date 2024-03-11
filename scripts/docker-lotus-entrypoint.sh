@@ -59,7 +59,7 @@ if  $BACKFILL_MODE && [ ! -f "$GATE" ]; then
     wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q -c $lite -O processfile.car.zst
     zstd -d processfile.car.zst
     rm -rf processfile.car.zst
-    /usr/local/bin/lotus --halt-after-import --import-snapshot processfile.car 
+    /usr/local/bin/lotus  daemon --halt-after-import --import-snapshot processfile.car 
 
      rm -rf processfile
 
