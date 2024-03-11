@@ -53,6 +53,9 @@ if  $BACKFILL_MODE && [ ! -f "$GATE" ]; then
 
   todoarr+=("https://forest-archive.chainsafe.dev/latest/mainnet/")
 
+
+  /usr/local/bin/lotus --halt-after-import --import-snapshot 
+
   mkdir /var/lib/lotus/process
   cd /var/lib/lotus/process
   rm -rf processfile
