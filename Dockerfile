@@ -1,4 +1,4 @@
-FROM golang:1.20.8-bullseye as builder
+FROM golang:1.21.7-bullseye AS builder
 MAINTAINER BitQuery
 
 RUN apt-get update && apt-get install -y ca-certificates build-essential clang ocl-icd-opencl-dev ocl-icd-libopencl1 jq libhwloc-dev

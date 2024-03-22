@@ -357,14 +357,13 @@ see https://lotus.filecoin.io/storage-providers/advanced-configurations/market/#
 			Comment: ``,
 		},
 	},
-	"Events": {
+	"EventsConfig": {
 		{
 			Name: "DisableRealTimeFilterAPI",
 			Type: "bool",
 
-			Comment: `EnableEthRPC enables APIs that
-DisableRealTimeFilterAPI will disable the RealTimeFilterAPI that can create and query filters for actor events as they are emitted.
-The API is enabled when EnableEthRPC is true, but can be disabled selectively with this flag.`,
+			Comment: `DisableRealTimeFilterAPI will disable the RealTimeFilterAPI that can create and query filters for actor events as they are emitted.
+The API is enabled when Fevm.EnableEthRPC or EnableActorEventsAPI is true, but can be disabled selectively with this flag.`,
 		},
 		{
 			Name: "DisableHistoricFilterAPI",
@@ -372,7 +371,16 @@ The API is enabled when EnableEthRPC is true, but can be disabled selectively wi
 
 			Comment: `DisableHistoricFilterAPI will disable the HistoricFilterAPI that can create and query filters for actor events
 that occurred in the past. HistoricFilterAPI maintains a queryable index of events.
-The API is enabled when EnableEthRPC is true, but can be disabled selectively with this flag.`,
+The API is enabled when Fevm.EnableEthRPC or EnableActorEventsAPI is true, but can be disabled selectively with this flag.`,
+		},
+		{
+			Name: "EnableActorEventsAPI",
+			Type: "bool",
+
+			Comment: `EnableActorEventsAPI enables the Actor events API that enables clients to consume events
+emitted by (smart contracts + built-in Actors).
+This will also enable the RealTimeFilterAPI and HistoricFilterAPI by default, but they can be
+disabled by setting their respective Disable* options.`,
 		},
 		{
 			Name: "FilterTTL",
@@ -464,7 +472,7 @@ Set to 0 to keep all mappings`,
 		},
 		{
 			Name: "Events",
-			Type: "Events",
+			Type: "DeprecatedEvents",
 
 			Comment: ``,
 		},
@@ -503,6 +511,12 @@ Set to 0 to keep all mappings`,
 		{
 			Name: "Fevm",
 			Type: "FevmConfig",
+
+			Comment: ``,
+		},
+		{
+			Name: "Events",
+			Type: "EventsConfig",
 
 			Comment: ``,
 		},
@@ -1549,6 +1563,30 @@ Submitting a smaller number of prove commits per epoch would reduce the possibil
 			Type: "bool",
 
 			Comment: `UseSyntheticPoRep, when set to true, will reduce the amount of cache data held on disk after the completion of PreCommit 2 to 11GiB.`,
+		},
+		{
+			Name: "RequireActivationSuccess",
+			Type: "bool",
+
+			Comment: `Whether to abort if any sector activation in a batch fails (newly sealed sectors, only with ProveCommitSectors3).`,
+		},
+		{
+			Name: "RequireActivationSuccessUpdate",
+			Type: "bool",
+
+			Comment: `Whether to abort if any piece activation notification returns a non-zero exit code (newly sealed sectors, only with ProveCommitSectors3).`,
+		},
+		{
+			Name: "RequireNotificationSuccess",
+			Type: "bool",
+
+			Comment: `Whether to abort if any sector activation in a batch fails (updating sectors, only with ProveReplicaUpdates3).`,
+		},
+		{
+			Name: "RequireNotificationSuccessUpdate",
+			Type: "bool",
+
+			Comment: `Whether to abort if any piece activation notification returns a non-zero exit code (updating sectors, only with ProveReplicaUpdates3).`,
 		},
 	},
 	"Splitstore": {
