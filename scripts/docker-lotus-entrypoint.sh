@@ -5,7 +5,7 @@ if [ ! -z $DOCKER_LOTUS_IMPORT_SNAPSHOT ]; then
 	# Don't init if already initialized.
 	if [ ! -f "$GATE" ]; then
 		echo "importing minimal snapshot $DOCKER_LOTUS_IMPORT_SNAPSHOT"
-		/usr/local/bin/lotus daemon --import-snapshot "$DOCKER_LOTUS_IMPORT_SNAPSHOT" --halt-after-import
+		/usr/local/bin/lotus daemon --import-snapshot "$DOCKER_LOTUS_IMPORT_SNAPSHOT" --halt-after-import --remove-existing-chain
 		# Block future inits
 		date > "$GATE"
 	fi
