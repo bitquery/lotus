@@ -778,9 +778,7 @@ func (mp *MessagePool) Add(ctx context.Context, m *types.SignedMessage) error {
 	_, _ = mp.getStateNonce(ctx, m.Message.From, tmpCurTs)
 
 	mp.curTsLk.Lock()
-	if tmpCurTs == mp.curTs {
-		//with the lock enabled, mp.curTs is the same Ts as we just had, so we know that our computations are cached
-	} else {
+	if tmpCurTs != mp.curTs {
 		//curTs has been updated so we want to cache the new one:
 		tmpCurTs = mp.curTs
 		//we want to release the lock, cache the computations then grab it again
@@ -789,7 +787,7 @@ func (mp *MessagePool) Add(ctx context.Context, m *types.SignedMessage) error {
 		_, _ = mp.getStateNonce(ctx, m.Message.From, tmpCurTs)
 		mp.curTsLk.Lock()
 		//now that we have the lock, we continue, we could do this as a loop forever, but that's bad to loop forever, and this was added as an optimization and it seems once is enough because the computation < block time
-	}
+	} // else with the lock enabled, mp.curTs is the same Ts as we just had, so we know that our computations are cached
 
 	defer mp.curTsLk.Unlock()
 
@@ -889,6 +887,11 @@ func (mp *MessagePool) addTs(ctx context.Context, m *types.SignedMessage, curTs 
 	nv := mp.api.StateNetworkVersion(ctx, epoch)
 
 	// TODO: I'm not thrilled about depending on filcns here, but I prefer this to duplicating logic
+
+	if m.Signature.Type == crypto.SigTypeDelegated && !consensus.IsValidEthTxForSending(nv, m) {
+		return false, xerrors.Errorf("network version should be atleast NV23 for sending legacy ETH transactions; but current network version is %d", nv)
+	}
+
 	if !consensus.IsValidForSending(nv, senderAct) {
 		return false, xerrors.Errorf("sender actor %s is not a valid top-level sender", m.Message.From)
 	}

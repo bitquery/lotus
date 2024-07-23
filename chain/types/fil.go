@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/invopop/jsonschema"
+
 	"github.com/filecoin-project/lotus/build"
 )
 
@@ -66,7 +68,7 @@ func (f FIL) Nano() string {
 func (f FIL) Format(s fmt.State, ch rune) {
 	switch ch {
 	case 's', 'v':
-		fmt.Fprint(s, f.String())
+		_, _ = fmt.Fprint(s, f.String())
 	default:
 		f.Int.Format(s, ch)
 	}
@@ -77,6 +79,10 @@ func (f FIL) MarshalText() (text []byte, err error) {
 }
 
 func (f FIL) UnmarshalText(text []byte) error {
+	if f.Int == nil {
+		return fmt.Errorf("cannot unmarshal into nil BigInt (text:%s)", string(text))
+	}
+
 	p, err := ParseFIL(string(text))
 	if err != nil {
 		return err
@@ -132,6 +138,13 @@ func MustParseFIL(s string) FIL {
 	}
 
 	return n
+}
+
+func (f FIL) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type:    "string",
+		Pattern: `^((\d+(\.\d+)?|0x[0-9a-fA-F]+))( ([aA]([tT][tT][oO])?)?[fF][iI][lL])?$`,
+	}
 }
 
 var _ encoding.TextMarshaler = (*FIL)(nil)

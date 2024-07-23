@@ -55,6 +55,9 @@ func Load(store adt.Store, act *types.Actor) (State, error) {
 		case actorstypes.Version13:
 			return load13(store, act.Head)
 
+		case actorstypes.Version14:
+			return load14(store, act.Head)
+
 		}
 	}
 
@@ -127,6 +130,9 @@ func MakeState(store adt.Store, av actors.Version) (State, error) {
 
 	case actors.Version13:
 		return make13(store)
+
+	case actors.Version14:
+		return make14(store)
 
 	}
 	return nil, xerrors.Errorf("unknown actor version %d", av)
@@ -219,7 +225,7 @@ type Partition interface {
 	UnprovenSectors() (bitfield.BitField, error)
 }
 
-type SectorOnChainInfo = minertypes.SectorOnChainInfo
+type SectorOnChainInfo = minertypes13.SectorOnChainInfo
 
 func PreferredSealProofTypeFromWindowPoStType(nver network.Version, proof abi.RegisteredPoStProof, configWantSynthetic bool) (abi.RegisteredSealProof, error) {
 	// We added support for the new proofs in network version 7, and removed support for the old
@@ -322,6 +328,7 @@ type ProveCommitSectors3Params = minertypes13.ProveCommitSectors3Params
 type SectorActivationManifest = minertypes13.SectorActivationManifest
 type ProveReplicaUpdates3Params = minertypes13.ProveReplicaUpdates3Params
 type SectorUpdateManifest = minertypes13.SectorUpdateManifest
+type SectorOnChainInfoFlags = minertypes13.SectorOnChainInfoFlags
 
 var QAPowerMax = minertypes.QAPowerMax
 
@@ -390,5 +397,6 @@ func AllCodes() []cid.Cid {
 		(&state11{}).Code(),
 		(&state12{}).Code(),
 		(&state13{}).Code(),
+		(&state14{}).Code(),
 	}
 }

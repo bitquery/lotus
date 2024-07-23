@@ -187,10 +187,14 @@ func (e *EthModuleDummy) EthTraceReplayBlockTransactions(ctx context.Context, bl
 	return nil, ErrModuleDisabled
 }
 
+func (e *EthModuleDummy) EthTraceTransaction(ctx context.Context, txHash string) ([]*ethtypes.EthTraceTransaction, error) {
+	return nil, ErrModuleDisabled
+}
+
 var _ EthModuleAPI = &EthModuleDummy{}
 var _ EthEventAPI = &EthModuleDummy{}
 
-var ErrActorEventModuleDisabled = errors.New("module disabled, enable with Fevm.EnableActorEventsAPI")
+var ErrActorEventModuleDisabled = errors.New("module disabled, enable with Events.EnableActorEventsAPI")
 
 type ActorEventDummy struct{}
 

@@ -178,18 +178,24 @@ func (sm *StateManager) HandleStateForks(ctx context.Context, root cid.Cid, heig
 	retCid := root
 	u := sm.stateMigrations[height]
 	if u != nil && u.upgrade != nil {
-		if height != build.UpgradeWatermelonFixHeight {
-			migCid, ok, err := u.migrationResultCache.Get(ctx, root)
-			if err == nil {
-				if ok {
-					log.Infow("CACHED migration", "height", height, "from", root, "to", migCid)
+		migCid, ok, err := u.migrationResultCache.Get(ctx, root)
+		if err == nil {
+			if ok {
+				log.Infow("CACHED migration", "height", height, "from", root, "to", migCid)
+				foundMigratedRoot, err := sm.ChainStore().StateBlockstore().Has(ctx, migCid)
+				if err != nil {
+					log.Errorw("failed to check whether previous migration result is present", "err", err)
+				} else if !foundMigratedRoot {
+					log.Errorw("cached migration result not found in blockstore, running migration again")
+					u.migrationResultCache.Delete(ctx, root)
+				} else {
 					return migCid, nil
 				}
-			} else if !errors.Is(err, datastore.ErrNotFound) {
-				log.Errorw("failed to lookup previous migration result", "err", err)
-			} else {
-				log.Debug("no cached migration found, migrating from scratch")
 			}
+		} else if !errors.Is(err, datastore.ErrNotFound) {
+			log.Errorw("failed to lookup previous migration result", "err", err)
+		} else {
+			log.Debug("no cached migration found, migrating from scratch")
 		}
 
 		startTime := time.Now()
@@ -197,7 +203,6 @@ func (sm *StateManager) HandleStateForks(ctx context.Context, root cid.Cid, heig
 		// Yes, we clone the cache, even for the final upgrade epoch. Why? Reverts. We may
 		// have to migrate multiple times.
 		tmpCache := u.cache.Clone()
-		var err error
 		retCid, err = u.upgrade(ctx, sm, tmpCache, cb, root, height, ts)
 		if err != nil {
 			log.Errorw("FAILED migration", "height", height, "from", root, "error", err)
@@ -222,7 +227,7 @@ func (sm *StateManager) HandleStateForks(ctx context.Context, root cid.Cid, heig
 // Returns true executing tipsets between the specified heights would trigger an expensive
 // migration. NOTE: migrations occurring _at_ the target height are not included, as they're
 // executed _after_ the target height.
-func (sm *StateManager) hasExpensiveForkBetween(parent, height abi.ChainEpoch) bool {
+func (sm *StateManager) HasExpensiveForkBetween(parent, height abi.ChainEpoch) bool {
 	for h := parent; h < height; h++ {
 		if _, ok := sm.expensiveUpgrades[h]; ok {
 			return true

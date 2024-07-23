@@ -11,11 +11,13 @@ import (
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/events/filter"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
@@ -24,6 +26,14 @@ import (
 func (gw *Node) EthAccounts(ctx context.Context) ([]ethtypes.EthAddress, error) {
 	// gateway provides public API, so it can't hold user accounts
 	return []ethtypes.EthAddress{}, nil
+}
+
+func (gw *Node) EthAddressToFilecoinAddress(ctx context.Context, ethAddress ethtypes.EthAddress) (address.Address, error) {
+	return gw.target.EthAddressToFilecoinAddress(ctx, ethAddress)
+}
+
+func (gw *Node) FilecoinAddressToEthAddress(ctx context.Context, filecoinAddress address.Address) (ethtypes.EthAddress, error) {
+	return gw.target.FilecoinAddressToEthAddress(ctx, filecoinAddress)
 }
 
 func (gw *Node) EthBlockNumber(ctx context.Context) (ethtypes.EthUint64, error) {
@@ -81,7 +91,7 @@ func (gw *Node) checkEthBlockParam(ctx context.Context, blkParam ethtypes.EthBlo
 			return err
 		}
 
-		var num ethtypes.EthUint64 = 0
+		var num ethtypes.EthUint64
 		if blkParam.PredefinedBlock != nil {
 			if *blkParam.PredefinedBlock == "earliest" {
 				return fmt.Errorf("block param \"earliest\" is not supported")
@@ -133,6 +143,10 @@ func (gw *Node) checkBlkParam(ctx context.Context, blkParam string, lookback eth
 			break
 		}
 		num = ethtypes.EthUint64(head.Height()) - lookback
+	case "safe":
+		num = ethtypes.EthUint64(head.Height()) - lookback - ethtypes.EthUint64(ethtypes.SafeEpochDelay)
+	case "finalized":
+		num = ethtypes.EthUint64(head.Height()) - lookback - ethtypes.EthUint64(build.Finality)
 	default:
 		if err := num.UnmarshalJSON([]byte(`"` + blkParam + `"`)); err != nil {
 			return fmt.Errorf("cannot parse block number: %v", err)
@@ -610,6 +624,14 @@ func (gw *Node) EthTraceReplayBlockTransactions(ctx context.Context, blkNum stri
 	}
 
 	return gw.target.EthTraceReplayBlockTransactions(ctx, blkNum, traceTypes)
+}
+
+func (gw *Node) EthTraceTransaction(ctx context.Context, txHash string) ([]*ethtypes.EthTraceTransaction, error) {
+	if err := gw.limit(ctx, stateRateLimitTokens); err != nil {
+		return nil, err
+	}
+
+	return gw.target.EthTraceTransaction(ctx, txHash)
 }
 
 var EthMaxFiltersPerConn = 16 // todo make this configurable

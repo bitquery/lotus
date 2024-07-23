@@ -93,14 +93,14 @@ type Commit2In struct {
 }
 
 func main() {
-	logging.SetLogLevel("*", "INFO")
+	_ = logging.SetLogLevel("*", "INFO")
 
 	log.Info("Starting lotus-bench")
 
 	app := &cli.App{
 		Name:                      "lotus-bench",
 		Usage:                     "Benchmark performance of lotus on your hardware",
-		Version:                   build.UserVersion(),
+		Version:                   string(build.NodeUserVersion()),
 		DisableSliceFlagSeparator: true,
 		Commands: []*cli.Command{
 			proveCmd,

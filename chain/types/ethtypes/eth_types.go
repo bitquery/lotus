@@ -28,6 +28,12 @@ import (
 
 var ErrInvalidAddress = errors.New("invalid Filecoin Eth address")
 
+// Research into Filecoin chain behaviour suggests that probabilistic finality
+// generally approaches the intended stability guarantee at, or near, 30 epochs.
+// Although a strictly "finalized" safe recommendation remains 900 epochs.
+// See https://github.com/filecoin-project/FIPs/blob/master/FRCs/frc-0089.md
+const SafeEpochDelay = abi.ChainEpoch(30)
+
 type EthUint64 uint64
 
 func (e EthUint64) MarshalJSON() ([]byte, error) {
@@ -197,7 +203,7 @@ func init() {
 	}
 }
 
-func NewEthBlock(hasTransactions bool) EthBlock {
+func NewEthBlock(hasTransactions bool, tipsetLen int) EthBlock {
 	b := EthBlock{
 		Sha3Uncles:       EmptyUncleHash, // Sha3Uncles set to a hardcoded value which is used by some clients to determine if has no uncles.
 		StateRoot:        EmptyEthHash,
@@ -208,7 +214,7 @@ func NewEthBlock(hasTransactions bool) EthBlock {
 		Extradata:        []byte{},
 		MixHash:          EmptyEthHash,
 		Nonce:            EmptyEthNonce,
-		GasLimit:         EthUint64(build.BlockGasLimit), // TODO we map Ethereum blocks to Filecoin tipsets; this is inconsistent.
+		GasLimit:         EthUint64(build.BlockGasLimit * int64(tipsetLen)),
 		Uncles:           []EthHash{},
 		Transactions:     []interface{}{},
 	}
@@ -229,13 +235,25 @@ type EthCall struct {
 }
 
 func (c *EthCall) UnmarshalJSON(b []byte) error {
-	type TempEthCall EthCall
-	var params TempEthCall
+	type EthCallRaw EthCall // Avoid a recursive call.
+	type EthCallDecode struct {
+		// The field should be "input" by spec, but many clients use "data" so we support
+		// both, but prefer "input".
+		Input *EthBytes `json:"input"`
+		EthCallRaw
+	}
 
+	var params EthCallDecode
 	if err := json.Unmarshal(b, &params); err != nil {
 		return err
 	}
-	*c = EthCall(params)
+
+	// If input is specified, prefer it.
+	if params.Input != nil {
+		params.Data = *params.Input
+	}
+
+	*c = EthCall(params.EthCallRaw)
 	return nil
 }
 
@@ -915,7 +933,7 @@ func NewEthBlockNumberOrHashFromNumber(number EthUint64) EthBlockNumberOrHash {
 
 func NewEthBlockNumberOrHashFromHexString(str string) (EthBlockNumberOrHash, error) {
 	// check if block param is a number (decimal or hex)
-	var num EthUint64 = 0
+	var num EthUint64
 	err := num.UnmarshalJSON([]byte(str))
 	if err != nil {
 		return NewEthBlockNumberOrHashFromNumber(0), err
@@ -997,6 +1015,14 @@ type EthTraceReplayBlockTransaction struct {
 	Trace           []*EthTrace `json:"trace"`
 	TransactionHash EthHash     `json:"transactionHash"`
 	VmTrace         *string     `json:"vmTrace"`
+}
+
+type EthTraceTransaction struct {
+	*EthTrace
+	BlockHash           EthHash `json:"blockHash"`
+	BlockNumber         int64   `json:"blockNumber"`
+	TransactionHash     EthHash `json:"transactionHash"`
+	TransactionPosition int     `json:"transactionPosition"`
 }
 
 type EthCallTraceAction struct {
