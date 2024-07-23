@@ -77,8 +77,8 @@ COPY --from=builder /opt/filecoin/lotus /usr/local/bin/
 COPY --from=builder /opt/filecoin/lotus-shed /usr/local/bin/
 COPY scripts/docker-lotus-entrypoint.sh /
 
-ARG DOCKER_LOTUS_IMPORT_SNAPSHOT https://snapshots.mainnet.filops.net/minimal/latest
-ENV DOCKER_LOTUS_IMPORT_SNAPSHOT ${DOCKER_LOTUS_IMPORT_SNAPSHOT}
+#ARG DOCKER_LOTUS_IMPORT_SNAPSHOT https://snapshots.mainnet.filops.net/minimal/latest
+#ENV DOCKER_LOTUS_IMPORT_SNAPSHOT ${DOCKER_LOTUS_IMPORT_SNAPSHOT}
 ENV FILECOIN_PARAMETER_CACHE /var/tmp/filecoin-proof-parameters
 ENV LOTUS_PATH /var/lib/lotus
 ENV DOCKER_LOTUS_IMPORT_WALLET ""
