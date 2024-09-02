@@ -3,6 +3,8 @@ package lp2p
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -60,12 +62,6 @@ func Host(mctx helpers.MetricsCtx, buildVersion build.BuildVersion, lc fx.Lifecy
 		return nil, err
 	}
 
-	lc.Append(fx.Hook{
-		OnStop: func(ctx context.Context) error {
-			return h.Close()
-		},
-	})
-
 	return h, nil
 }
 
@@ -92,8 +88,22 @@ func DHTRouting(mode dht.ModeOpt) interface{} {
 			dht.Datastore(dstore),
 			dht.Validator(validator),
 			dht.ProtocolPrefix(build.DhtProtocolName(nn)),
-			dht.QueryFilter(dht.PublicQueryFilter),
-			dht.RoutingTableFilter(dht.PublicRoutingTableFilter),
+			dht.QueryFilter(func(_dht interface{}, ai peer.AddrInfo) bool {
+				env := strings.ToLower(os.Getenv("LOTUS_P2P_DHT_NO_QUERY_FILTER"))
+				if env == "1" || env == "true" {
+					log.Warnf("DHT query filter is disabled. (LOTUS_P2P_DHT_NO_QUERY_FILTER=%s)", env)
+					return true
+				}
+				return dht.PublicQueryFilter(_dht, ai)
+			}),
+			dht.RoutingTableFilter(func(_dht interface{}, p peer.ID) bool {
+				env := strings.ToLower(os.Getenv("LOTUS_P2P_DHT_NO_ROUTING_TABLE_FILTER"))
+				if env == "1" || env == "true" {
+					log.Warnf("DHT query filter is disabled. (LOTUS_P2P_DHT_NO_ROUTING_TABLE_FILTER=%s)", env)
+					return true
+				}
+				return dht.PublicRoutingTableFilter(_dht, p)
+			}),
 			dht.DisableProviders(),
 			dht.DisableValues()}
 		d, err := dht.New(

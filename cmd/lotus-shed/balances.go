@@ -24,7 +24,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 
-	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	_init "github.com/filecoin-project/lotus/chain/actors/builtin/init"
@@ -36,6 +36,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/index"
+	proofsffi "github.com/filecoin-project/lotus/chain/proofs/ffi"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -43,7 +44,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/node/repo"
-	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
 )
 
 type accountInfo struct {
@@ -373,7 +373,7 @@ var chainBalanceSanityCheckCmd = &cli.Command{
 			bal = big.Add(bal, act.Balance)
 		}
 
-		attoBase := big.Mul(big.NewInt(int64(build.FilBase)), big.NewInt(int64(build.FilecoinPrecision)))
+		attoBase := big.Mul(big.NewInt(int64(buildconstants.FilBase)), big.NewInt(int64(buildconstants.FilecoinPrecision)))
 
 		if big.Cmp(attoBase, bal) != 0 {
 			return xerrors.Errorf("sanity check failed (expected %s, actual %s)", attoBase, bal)
@@ -514,7 +514,7 @@ var chainBalanceStateCmd = &cli.Command{
 		cst := cbor.NewCborStore(bs)
 		store := adt.WrapStore(ctx, cst)
 
-		sm, err := stmgr.NewStateManager(cs, consensus.NewTipSetExecutor(filcns.RewardFunc), vm.Syscalls(ffiwrapper.ProofVerifier), filcns.DefaultUpgradeSchedule(), nil, mds, index.DummyMsgIndex)
+		sm, err := stmgr.NewStateManager(cs, consensus.NewTipSetExecutor(filcns.RewardFunc), vm.Syscalls(proofsffi.ProofVerifier), filcns.DefaultUpgradeSchedule(), nil, mds, index.DummyMsgIndex)
 		if err != nil {
 			return err
 		}
@@ -738,7 +738,7 @@ var chainPledgeCmd = &cli.Command{
 		cst := cbor.NewCborStore(bs)
 		store := adt.WrapStore(ctx, cst)
 
-		sm, err := stmgr.NewStateManager(cs, consensus.NewTipSetExecutor(filcns.RewardFunc), vm.Syscalls(ffiwrapper.ProofVerifier), filcns.DefaultUpgradeSchedule(), nil, mds, index.DummyMsgIndex)
+		sm, err := stmgr.NewStateManager(cs, consensus.NewTipSetExecutor(filcns.RewardFunc), vm.Syscalls(proofsffi.ProofVerifier), filcns.DefaultUpgradeSchedule(), nil, mds, index.DummyMsgIndex)
 		if err != nil {
 			return err
 		}

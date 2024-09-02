@@ -35,6 +35,7 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
@@ -42,6 +43,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/messagepool"
+	"github.com/filecoin-project/lotus/chain/proofs"
+	proofsmock "github.com/filecoin-project/lotus/chain/proofs/mock"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet/key"
@@ -120,15 +123,15 @@ type Ensemble struct {
 	inactive struct {
 		fullnodes       []*TestFullNode
 		miners          []*TestMiner
-		unmanagedMiners []*TestUnmanagedMiner
 		workers         []*TestWorker
+		unmanagedMiners []*TestUnmanagedMiner
 	}
 	active struct {
 		fullnodes       []*TestFullNode
 		miners          []*TestMiner
-		unmanagedMiners []*TestUnmanagedMiner
 		workers         []*TestWorker
 		bms             map[*TestMiner]*BlockMiner
+		unmanagedMiners []*TestUnmanagedMiner
 	}
 	genesis struct {
 		version  network.Version
@@ -171,7 +174,7 @@ func NewEnsemble(t *testing.T, opts ...EnsembleOpt) *Ensemble {
 		require.NoError(t, build.UseNetworkBundle("testing"))
 	}
 
-	build.EquivocationDelaySecs = 0
+	buildconstants.EquivocationDelaySecs = 0
 
 	return n
 }
@@ -221,7 +224,7 @@ func (n *Ensemble) FullNode(full *TestFullNode, opts ...NodeOpt) *Ensemble {
 	return n
 }
 
-// Miner enrolls a new miner, using the provided full node for chain
+// MinerEnroll enrolls a new miner, using the provided full node for chain
 // interactions.
 func (n *Ensemble) MinerEnroll(minerNode *TestMiner, full *TestFullNode, opts ...NodeOpt) *Ensemble {
 	require.NotNil(n.t, full, "full node required when instantiating miner")
@@ -323,11 +326,11 @@ func (n *Ensemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ...NodeO
 	return n
 }
 
-func (n *Ensemble) UnmanagedMiner(full *TestFullNode, opts ...NodeOpt) (*TestUnmanagedMiner, *Ensemble) {
+func (n *Ensemble) UnmanagedMiner(ctx context.Context, full *TestFullNode, opts ...NodeOpt) (*TestUnmanagedMiner, *Ensemble) {
 	actorAddr, err := address.NewIDAddress(genesis2.MinerStart + n.minerCount())
 	require.NoError(n.t, err)
 
-	minerNode := NewTestUnmanagedMiner(n.t, full, actorAddr, n.options.mockProofs, opts...)
+	minerNode := NewTestUnmanagedMiner(ctx, n.t, full, actorAddr, n.options.mockProofs, opts...)
 	n.AddInactiveUnmanagedMiner(minerNode)
 	return minerNode, n
 }
@@ -459,6 +462,7 @@ func (n *Ensemble) Start() *Ensemble {
 		// Are we mocking proofs?
 		if n.options.mockProofs {
 			opts = append(opts,
+				node.Override(new(proofs.Verifier), proofsmock.MockVerifier),
 				node.Override(new(storiface.Verifier), mock.MockVerifier),
 				node.Override(new(storiface.Prover), mock.MockProver),
 			)
@@ -554,7 +558,7 @@ func (n *Ensemble) Start() *Ensemble {
 				})
 				require.NoError(n.t, err)
 
-				mw, err := m.FullNode.FullNode.StateWaitMsg(ctx, signed.Cid(), build.MessageConfidence, api.LookbackNoLimit, true)
+				mw, err := m.FullNode.FullNode.StateWaitMsg(ctx, signed.Cid(), buildconstants.MessageConfidence, api.LookbackNoLimit, true)
 				require.NoError(n.t, err)
 				require.Equal(n.t, exitcode.Ok, mw.Receipt.ExitCode)
 
@@ -580,7 +584,7 @@ func (n *Ensemble) Start() *Ensemble {
 				})
 				require.NoError(n.t, err2)
 
-				mw, err2 := m.FullNode.FullNode.StateWaitMsg(ctx, signed.Cid(), build.MessageConfidence, api.LookbackNoLimit, true)
+				mw, err2 := m.FullNode.FullNode.StateWaitMsg(ctx, signed.Cid(), buildconstants.MessageConfidence, api.LookbackNoLimit, true)
 				require.NoError(n.t, err2)
 				require.Equal(n.t, exitcode.Ok, mw.Receipt.ExitCode)
 			}
@@ -773,6 +777,7 @@ func (n *Ensemble) Start() *Ensemble {
 				node.Override(new(sectorstorage.Unsealer), node.From(new(*mock.SectorMgr))),
 				node.Override(new(sectorstorage.PieceProvider), node.From(new(*mock.SectorMgr))),
 
+				node.Override(new(proofs.Verifier), proofsmock.MockVerifier),
 				node.Override(new(storiface.Verifier), mock.MockVerifier),
 				node.Override(new(storiface.Prover), mock.MockProver),
 				node.Unset(new(*sectorstorage.Manager)),
@@ -844,7 +849,7 @@ func (n *Ensemble) Start() *Ensemble {
 		})
 		require.NoError(n.t, err)
 
-		mw, err := m.FullNode.FullNode.StateWaitMsg(ctx, signed.Cid(), build.MessageConfidence, api.LookbackNoLimit, true)
+		mw, err := m.FullNode.FullNode.StateWaitMsg(ctx, signed.Cid(), buildconstants.MessageConfidence, api.LookbackNoLimit, true)
 		require.NoError(n.t, err)
 		require.Equal(n.t, exitcode.Ok, mw.Receipt.ExitCode)
 

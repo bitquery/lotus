@@ -29,12 +29,15 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/index"
+	"github.com/filecoin-project/lotus/chain/proofs"
+	proofsffi "github.com/filecoin-project/lotus/chain/proofs/ffi"
 	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -45,8 +48,6 @@ import (
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/node/repo"
-	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
-	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 const msgsPerBlock = 20
@@ -227,7 +228,7 @@ func NewGeneratorWithSectorsAndUpgradeSchedule(numSectors int, us stmgr.UpgradeS
 		VerifregRootKey:  DefaultVerifregRootkeyActor,
 		RemainderAccount: DefaultRemainderAccountActor,
 		NetworkName:      uuid.New().String(),
-		Timestamp:        uint64(build.Clock.Now().Add(-500 * time.Duration(build.BlockDelaySecs) * time.Second).Unix()),
+		Timestamp:        uint64(build.Clock.Now().Add(-500 * time.Duration(buildconstants.BlockDelaySecs) * time.Second).Unix()),
 	}
 
 	genb, err := genesis2.MakeGenesisBlock(context.TODO(), j, bs, sys, tpl)
@@ -252,7 +253,7 @@ func NewGeneratorWithSectorsAndUpgradeSchedule(numSectors int, us stmgr.UpgradeS
 	miners := []address.Address{maddr1, maddr2}
 
 	beac := beacon.Schedule{{Start: 0, Beacon: beacon.NewMockBeacon(time.Second)}}
-	//beac, err := drand.NewDrandBeacon(tpl.Timestamp, build.BlockDelaySecs)
+	//beac, err := drand.NewDrandBeacon(tpl.Timestamp, buildconstants.BlockDelaySecs)
 	//if err != nil {
 	//return nil, xerrors.Errorf("creating drand beacon: %w", err)
 	//}
@@ -349,7 +350,7 @@ func CarWalkFunc(nd format.Node) (out []*format.Link, err error) {
 }
 
 func (cg *ChainGen) nextBlockProof(ctx context.Context, pts *types.TipSet, m address.Address, round abi.ChainEpoch) ([]types.BeaconEntry, *types.ElectionProof, *types.Ticket, error) {
-	mc := &mca{w: cg.w, sm: cg.sm, pv: ffiwrapper.ProofVerifier, bcn: cg.beacon}
+	mc := &mca{w: cg.w, sm: cg.sm, pv: proofsffi.ProofVerifier, bcn: cg.beacon}
 
 	mbi, err := mc.MinerGetBaseInfo(ctx, m, round, pts.Key())
 	if err != nil {
@@ -372,11 +373,11 @@ func (cg *ChainGen) nextBlockProof(ctx context.Context, pts *types.TipSet, m add
 		return nil, nil, nil, xerrors.Errorf("failed to cbor marshal address: %w", err)
 	}
 
-	if round > build.UpgradeSmokeHeight {
+	if round > buildconstants.UpgradeSmokeHeight {
 		buf.Write(pts.MinTicket().VRFProof)
 	}
 
-	ticketRand, err := rand.DrawRandomnessFromBase(rbase.Data, crypto.DomainSeparationTag_TicketProduction, round-build.TicketRandomnessLookback, buf.Bytes())
+	ticketRand, err := rand.DrawRandomnessFromBase(rbase.Data, crypto.DomainSeparationTag_TicketProduction, round-buildconstants.TicketRandomnessLookback, buf.Bytes())
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -504,7 +505,7 @@ func (cg *ChainGen) makeBlock(parents *types.TipSet, m address.Address, vrfticke
 	if cg.Timestamper != nil {
 		ts = cg.Timestamper(parents, height-parents.Height())
 	} else {
-		ts = parents.MinTimestamp() + uint64(height-parents.Height())*build.BlockDelaySecs
+		ts = parents.MinTimestamp() + uint64(height-parents.Height())*buildconstants.BlockDelaySecs
 	}
 
 	fblk, err := filcns.NewFilecoinExpectedConsensus(cg.sm, nil, nil, nil).CreateBlock(context.TODO(), cg.w, &api.BlockTemplate{
@@ -602,7 +603,7 @@ type MiningCheckAPI interface {
 type mca struct {
 	w   *wallet.LocalWallet
 	sm  *stmgr.StateManager
-	pv  storiface.Verifier
+	pv  proofs.Verifier
 	bcn beacon.Schedule
 }
 
@@ -684,7 +685,7 @@ func ComputeVRF(ctx context.Context, sign SignFunc, worker address.Address, sigI
 
 type genFakeVerifier struct{}
 
-var _ storiface.Verifier = (*genFakeVerifier)(nil)
+var _ proofs.Verifier = (*genFakeVerifier)(nil)
 
 func (m genFakeVerifier) VerifySeal(svi proof7.SealVerifyInfo) (bool, error) {
 	return true, nil

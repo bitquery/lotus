@@ -14,7 +14,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	cborutil "github.com/filecoin-project/go-cbor-util"
-	"github.com/filecoin-project/go-commp-utils/zerocomm"
+	"github.com/filecoin-project/go-commp-utils/v2/zerocomm"
 	"github.com/filecoin-project/go-state-types/abi"
 	actorstypes "github.com/filecoin-project/go-state-types/actors"
 	"github.com/filecoin-project/go-state-types/big"
@@ -28,7 +28,7 @@ import (
 	"github.com/filecoin-project/go-statemachine"
 
 	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
@@ -403,7 +403,7 @@ func (m *Sealing) preCommitInfo(ctx statemachine.Context, sector SectorInfo) (*m
 		return nil, big.Zero(), types.EmptyTSK, ctx.Send(SectorSealPreCommit1Failed{xerrors.Errorf("failed to get max prove commit duration: %w", err)})
 	}
 
-	if minExpiration := sector.TicketEpoch + policy.MaxPreCommitRandomnessLookback + msd + miner.MinSectorExpiration; expiration < minExpiration {
+	if minExpiration := sector.TicketEpoch + policy.MaxPreCommitRandomnessLookback + msd + policy.GetMinSectorExpiration(); expiration < minExpiration {
 		expiration = minExpiration
 	}
 
@@ -483,7 +483,7 @@ func (m *Sealing) handlePreCommitWait(ctx statemachine.Context, sector SectorInf
 
 	// would be ideal to just use the events.Called handler, but it wouldn't be able to handle individual message timeouts
 	log.Info("Sector precommitted: ", sector.SectorNumber)
-	mw, err := m.Api.StateWaitMsg(ctx.Context(), *sector.PreCommitMessage, build.MessageConfidence, api.LookbackNoLimit, true)
+	mw, err := m.Api.StateWaitMsg(ctx.Context(), *sector.PreCommitMessage, buildconstants.MessageConfidence, api.LookbackNoLimit, true)
 	if err != nil {
 		return ctx.Send(SectorChainPreCommitFailed{err})
 	}
@@ -780,6 +780,16 @@ func (m *Sealing) handleSubmitCommitAggregate(ctx statemachine.Context, sector S
 		return err
 	}
 
+	pci, err := m.Api.StateSectorPreCommitInfo(ctx.Context(), m.maddr, sector.SectorNumber, types.EmptyTSK)
+	if err != nil {
+		return xerrors.Errorf("getting precommit info: %w", err)
+	}
+
+	weight, err := m.sectorWeight(ctx.Context(), sector, pci.Info.Expiration)
+	if err != nil {
+		return xerrors.Errorf("getting sector weight: %w", err)
+	}
+
 	res, err := m.commiter.AddCommit(ctx.Context(), sector, AggregateInput{
 		Info: proof.AggregateSealVerifyInfo{
 			Number:                sector.SectorNumber,
@@ -788,8 +798,9 @@ func (m *Sealing) handleSubmitCommitAggregate(ctx statemachine.Context, sector S
 			SealedCID:             *sector.CommR,
 			UnsealedCID:           *sector.CommD,
 		},
-		Proof: sector.Proof,
-		Spt:   sector.SectorType,
+		Proof:  sector.Proof,
+		Spt:    sector.SectorType,
+		Weight: weight,
 
 		ActivationManifest: miner2.SectorActivationManifest{
 			SectorNumber: sector.SectorNumber,
@@ -828,7 +839,7 @@ func (m *Sealing) handleCommitWait(ctx statemachine.Context, sector SectorInfo) 
 		return ctx.Send(SectorCommitFailed{xerrors.Errorf("entered commit wait with no commit cid")})
 	}
 
-	mw, err := m.Api.StateWaitMsg(ctx.Context(), *sector.CommitMessage, build.MessageConfidence, api.LookbackNoLimit, true)
+	mw, err := m.Api.StateWaitMsg(ctx.Context(), *sector.CommitMessage, buildconstants.MessageConfidence, api.LookbackNoLimit, true)
 	if err != nil {
 		return ctx.Send(SectorCommitFailed{xerrors.Errorf("failed to wait for porep inclusion: %w", err)})
 	}

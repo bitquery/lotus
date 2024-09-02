@@ -414,7 +414,7 @@ type FullNode interface {
 	StateAllMinerFaults(ctx context.Context, lookback abi.ChainEpoch, ts types.TipSetKey) ([]*Fault, error) //perm:read
 	// StateMinerRecoveries returns a bitfield indicating the recovering sectors of the given miner
 	StateMinerRecoveries(context.Context, address.Address, types.TipSetKey) (bitfield.BitField, error) //perm:read
-	// StateMinerInitialPledgeCollateral returns the precommit deposit for the specified miner's sector
+	// StateMinerPreCommitDepositForPower returns the precommit deposit for the specified miner's sector
 	StateMinerPreCommitDepositForPower(context.Context, address.Address, miner.SectorPreCommitInfo, types.TipSetKey) (types.BigInt, error) //perm:read
 	// StateMinerInitialPledgeCollateral returns the initial pledge collateral for the specified miner's sector
 	StateMinerInitialPledgeCollateral(context.Context, address.Address, miner.SectorPreCommitInfo, types.TipSetKey) (types.BigInt, error) //perm:read
@@ -733,8 +733,34 @@ type FullNode interface {
 	EthAccounts(ctx context.Context) ([]ethtypes.EthAddress, error) //perm:read
 	// EthAddressToFilecoinAddress converts an EthAddress into an f410 Filecoin Address
 	EthAddressToFilecoinAddress(ctx context.Context, ethAddress ethtypes.EthAddress) (address.Address, error) //perm:read
-	// FilecoinAddressToEthAddress converts an f410 or f0 Filecoin Address to an EthAddress
-	FilecoinAddressToEthAddress(ctx context.Context, filecoinAddress address.Address) (ethtypes.EthAddress, error) //perm:read
+
+	// `FilecoinAddressToEthAddress` converts any Filecoin address to an EthAddress.
+	//
+	// This method supports all Filecoin address types:
+	// - "f0" and "f4" addresses: Converted directly.
+	// - "f1", "f2", and "f3" addresses: First converted to their corresponding "f0" ID address, then to an EthAddress.
+	//
+	// Requirements:
+	// - For "f1", "f2", and "f3" addresses, they must be instantiated on-chain, as "f0" ID addresses are only assigned to actors when they are created on-chain.
+	// The simplest way to instantiate an address on chain is to send a transaction to the address.
+	//
+	// Note on chain reorganizations:
+	// "f0" ID addresses are not permanent and can be affected by chain reorganizations. To account for this,
+	// the API includes a `blkNum` parameter, which specifies the block number that is used to determine the tipset state to use for converting an
+	// "f1"/"f2"/"f3" address to an "f0" address. This parameter functions similarly to the `blkNum` parameter in the existing `EthGetBlockByNumber` API.
+	// See https://docs.alchemy.com/reference/eth-getblockbynumber for more details.
+	//
+	// Parameters:
+	// - ctx: The context for the API call.
+	// - filecoinAddress: The Filecoin address to convert.
+	// - blkNum: The block number or state for the conversion. Defaults to "finalized" for maximum safety.
+	//   Possible values: "pending", "latest", "finalized", "safe", or a specific block number represented as hex.
+	//
+	// Returns:
+	// - The corresponding EthAddress.
+	// - An error if the conversion fails.
+	FilecoinAddressToEthAddress(ctx context.Context, p jsonrpc.RawParams) (ethtypes.EthAddress, error) //perm:read
+
 	// EthBlockNumber returns the height of the latest (heaviest) TipSet
 	EthBlockNumber(ctx context.Context) (ethtypes.EthUint64, error) //perm:read
 	// EthGetBlockTransactionCountByNumber returns the number of messages in the TipSet
@@ -836,6 +862,9 @@ type FullNode interface {
 	// Implmements OpenEthereum-compatible API method trace_transaction
 	EthTraceTransaction(ctx context.Context, txHash string) ([]*ethtypes.EthTraceTransaction, error) //perm:read
 
+	// Implements OpenEthereum-compatible API method trace_filter
+	EthTraceFilter(ctx context.Context, filter ethtypes.EthTraceFilterCriteria) ([]*ethtypes.EthTraceFilterResult, error) //perm:read
+
 	// CreateBackup creates node backup onder the specified file name. The
 	// method requires that the lotus daemon is running with the
 	// LOTUS_BACKUP_BASE_PATH environment variable set to some path, and that
@@ -894,7 +923,7 @@ type FullNode interface {
 	F3GetF3PowerTable(ctx context.Context, tsk types.TipSetKey) (gpbft.PowerEntries, error) //perm:read
 }
 
-// reverse interface to the client, called after EthSubscribe
+// EthSubscriber is the reverse interface to the client, called after EthSubscribe
 type EthSubscriber interface {
 	// note: the parameter is ethtypes.EthSubscriptionResponse serialized as json object
 	EthSubscription(ctx context.Context, r jsonrpc.RawParams) error // rpc_method:eth_subscription notify:true
@@ -928,11 +957,9 @@ type MsgGasCost struct {
 	TotalCost          abi.TokenAmount
 }
 
-// BlsMessages[x].cid = Cids[x]
-// SecpkMessages[y].cid = Cids[BlsMessages.length + y]
 type BlockMessages struct {
-	BlsMessages   []*types.Message
-	SecpkMessages []*types.SignedMessage
+	BlsMessages   []*types.Message       // BlsMessages [x].cid = Cids[x]
+	SecpkMessages []*types.SignedMessage // SecpkMessages [y].cid = Cids[BlsMessages.length + y]
 
 	Cids []cid.Cid
 }

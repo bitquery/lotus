@@ -15,7 +15,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/network"
 
-	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -81,6 +81,7 @@ func TestLegacyValueTransferValidSignature(t *testing.T) {
 	require.EqualValues(t, ethAddr, receipt.From)
 	require.EqualValues(t, ethAddr2, *receipt.To)
 	require.EqualValues(t, hash, receipt.TransactionHash)
+	require.EqualValues(t, ethtypes.EthLegacyTxType, receipt.Type)
 
 	// Success.
 	require.EqualValues(t, ethtypes.EthUint64(0x1), receipt.Status)
@@ -154,7 +155,7 @@ func TestLegacyEIP155ValueTransferValidSignatureFailsNV22(t *testing.T) {
 	tx := ethtypes.NewEthLegacy155TxArgs(legacyTx)
 
 	// TX will fail as we're still at NV22
-	client.EVM().SignLegacyEIP155Transaction(tx, key.PrivateKey, big.NewInt(build.Eip155ChainId))
+	client.EVM().SignLegacyEIP155Transaction(tx, key.PrivateKey, big.NewInt(buildconstants.Eip155ChainId))
 
 	signed, err := tx.ToRawTxBytesSigned()
 	require.NoError(t, err)
@@ -201,7 +202,7 @@ func TestLegacyEIP155ValueTransferValidSignature(t *testing.T) {
 	}
 	tx := ethtypes.NewEthLegacy155TxArgs(legacyTx)
 
-	client.EVM().SignLegacyEIP155Transaction(tx, key.PrivateKey, big.NewInt(build.Eip155ChainId))
+	client.EVM().SignLegacyEIP155Transaction(tx, key.PrivateKey, big.NewInt(buildconstants.Eip155ChainId))
 	// Mangle signature
 	innerTx := tx.GetLegacyTx()
 	innerTx.V.Int.Xor(innerTx.V.Int, big.NewInt(1).Int)
@@ -213,7 +214,7 @@ func TestLegacyEIP155ValueTransferValidSignature(t *testing.T) {
 	require.Error(t, err)
 
 	// Submit transaction with valid signature but incorrect chain ID
-	client.EVM().SignLegacyEIP155Transaction(tx, key.PrivateKey, big.NewInt(build.Eip155ChainId))
+	client.EVM().SignLegacyEIP155Transaction(tx, key.PrivateKey, big.NewInt(buildconstants.Eip155ChainId))
 
 	signed, err = tx.ToRawTxBytesSigned()
 	require.NoError(t, err)
@@ -227,6 +228,7 @@ func TestLegacyEIP155ValueTransferValidSignature(t *testing.T) {
 	require.EqualValues(t, ethAddr, receipt.From)
 	require.EqualValues(t, ethAddr2, *receipt.To)
 	require.EqualValues(t, hash, receipt.TransactionHash)
+	require.EqualValues(t, ethtypes.EthLegacyTxType, receipt.Type)
 
 	// Success.
 	require.EqualValues(t, ethtypes.EthUint64(0x1), receipt.Status)
@@ -244,7 +246,7 @@ func TestLegacyEIP155ValueTransferValidSignature(t *testing.T) {
 	require.EqualValues(t, hash, ethTx.Hash)
 	require.EqualValues(t, innerTx.Value, ethTx.Value)
 	require.EqualValues(t, 0, ethTx.Type)
-	require.EqualValues(t, build.Eip155ChainId, ethTx.ChainID)
+	require.EqualValues(t, buildconstants.Eip155ChainId, ethTx.ChainID)
 	require.EqualValues(t, ethtypes.EthBytes{}, ethTx.Input)
 	require.EqualValues(t, innerTx.GasLimit, ethTx.Gas)
 	require.EqualValues(t, innerTx.GasPrice, *ethTx.GasPrice)

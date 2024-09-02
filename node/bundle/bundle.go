@@ -3,11 +3,11 @@ package bundle
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"os"
 
 	"github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-car"
 	"golang.org/x/xerrors"
 
@@ -15,8 +15,11 @@ import (
 
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain/actors"
 )
+
+var log = logging.Logger("bundle")
 
 func LoadBundleFromFile(ctx context.Context, bs blockstore.Blockstore, path string) (cid.Cid, error) {
 	f, err := os.Open(path)
@@ -54,7 +57,7 @@ func LoadBundles(ctx context.Context, bs blockstore.Blockstore, versions ...acto
 			// All manifests are registered on start, so this must succeed.
 			return xerrors.Errorf("unknown actor version v%d", av)
 		}
-		fmt.Printf("manifest cid: %s\n", manifestCid)
+		log.Infof("manifest cid: %s", manifestCid)
 
 		if haveManifest, err := bs.Has(ctx, manifestCid); err != nil {
 			return xerrors.Errorf("blockstore error when loading manifest %s: %w", manifestCid, err)
@@ -69,7 +72,7 @@ func LoadBundles(ctx context.Context, bs blockstore.Blockstore, versions ...acto
 		)
 		if path, ok := build.BundleOverrides[av]; ok {
 			root, err = LoadBundleFromFile(ctx, bs, path)
-		} else if embedded, ok := build.GetEmbeddedBuiltinActorsBundle(av, build.NetworkBundle); ok {
+		} else if embedded, ok := build.GetEmbeddedBuiltinActorsBundle(av, buildconstants.NetworkBundle); ok {
 			root, err = LoadBundle(ctx, bs, bytes.NewReader(embedded))
 		} else {
 			err = xerrors.Errorf("bundle for actors version v%d not found", av)

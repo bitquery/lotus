@@ -14,7 +14,7 @@ import (
 	"github.com/filecoin-project/go-statemachine"
 
 	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -142,6 +142,13 @@ func (m *Sealing) handleSubmitReplicaUpdate(ctx statemachine.Context, sector Sec
 		log.Errorf("failed to get pledge for power: %+v", err)
 		return ctx.Send(SectorSubmitReplicaUpdateFailed{})
 	}
+
+	log.Infow("submitting replica update",
+		"sector", sector.SectorNumber,
+		"weight", types.FIL(weightUpdate),
+		"totalPledge", types.FIL(collateral),
+		"initialPledge", types.FIL(onChainInfo.InitialPledge),
+		"toPledge", types.FIL(big.Sub(collateral, onChainInfo.InitialPledge)))
 
 	collateral = big.Sub(collateral, onChainInfo.InitialPledge)
 	if collateral.LessThan(big.Zero()) {
@@ -274,7 +281,7 @@ func (m *Sealing) handleReplicaUpdateWait(ctx statemachine.Context, sector Secto
 		return ctx.Send(SectorSubmitReplicaUpdateFailed{})
 	}
 
-	mw, err := m.Api.StateWaitMsg(ctx.Context(), *sector.ReplicaUpdateMessage, build.MessageConfidence, api.LookbackNoLimit, true)
+	mw, err := m.Api.StateWaitMsg(ctx.Context(), *sector.ReplicaUpdateMessage, buildconstants.MessageConfidence, api.LookbackNoLimit, true)
 	if err != nil {
 		log.Errorf("handleReplicaUpdateWait: failed to wait for message: %+v", err)
 		return ctx.Send(SectorSubmitReplicaUpdateFailed{})
@@ -330,7 +337,7 @@ func (m *Sealing) handleUpdateActivating(ctx statemachine.Context, sector Sector
 	}
 
 	try := func() error {
-		mw, err := m.Api.StateWaitMsg(ctx.Context(), *sector.ReplicaUpdateMessage, build.MessageConfidence, api.LookbackNoLimit, true)
+		mw, err := m.Api.StateWaitMsg(ctx.Context(), *sector.ReplicaUpdateMessage, buildconstants.MessageConfidence, api.LookbackNoLimit, true)
 		if err != nil {
 			return err
 		}

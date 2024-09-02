@@ -1,7 +1,7 @@
 //go:build interopnet
 // +build interopnet
 
-package build
+package buildconstants
 
 import (
 	"os"
@@ -11,15 +11,11 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	actorstypes "github.com/filecoin-project/go-state-types/actors"
 	"github.com/filecoin-project/go-state-types/network"
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
-
-	"github.com/filecoin-project/lotus/chain/actors/policy"
 )
 
 var NetworkBundle = "caterpillarnet"
-var BundleOverrides map[actorstypes.Version]string
 var ActorDebugging = false
 
 const BootstrappersFile = "interopnet.pi"
@@ -78,15 +74,9 @@ var SupportedProofTypes = []abi.RegisteredSealProof{
 	abi.RegisteredSealProof_StackedDrg512MiBV1,
 }
 var ConsensusMinerMinPower = abi.NewStoragePower(2048)
-var MinVerifiedDealSize = abi.NewStoragePower(256)
 var PreCommitChallengeDelay = abi.ChainEpoch(10)
 
 func init() {
-	policy.SetSupportedProofTypes(SupportedProofTypes...)
-	policy.SetConsensusMinerMinPower(ConsensusMinerMinPower)
-	policy.SetMinVerifiedDealSize(MinVerifiedDealSize)
-	policy.SetPreCommitChallengeDelay(PreCommitChallengeDelay)
-
 	getUpgradeHeight := func(ev string, def abi.ChainEpoch) abi.ChainEpoch {
 		hs, found := os.LookupEnv(ev)
 		if found {
@@ -145,6 +135,6 @@ const Eip155ChainId = 3141592
 
 var WhitelistedBlock = cid.Undef
 
-const f3Enabled = true
+const F3Enabled = true
 const ManifestServerID = "12D3KooWQJ2rdVnG4okDUB6yHQhAjNutGNemcM7XzqC9Eo4z9Jce"
 const F3BootstrapEpoch abi.ChainEpoch = 1000
