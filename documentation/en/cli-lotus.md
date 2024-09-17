@@ -7,7 +7,7 @@ USAGE:
    lotus [global options] command [command options] [arguments...]
 
 VERSION:
-   1.28.1
+   1.29.1
 
 COMMANDS:
    daemon   Start a lotus daemon process
@@ -222,7 +222,7 @@ NAME:
    lotus wallet new - Generate a new key of the given type
 
 USAGE:
-   lotus wallet new [command options] [bls|secp256k1 (default secp256k1)]
+   lotus wallet new [command options] [bls|secp256k1|delegated (default secp256k1)]
 
 OPTIONS:
    --help, -h  show help
@@ -2186,7 +2186,7 @@ USAGE:
 
 OPTIONS:
    --from value   optionally specify the account to use for sending the exec message
-   --value value  optionally specify the value to be sent with the invokation message (default: 0)
+   --value value  optionally specify the value to be sent with the invocation message (default: 0)
    --help, -h     show help
 ```
 

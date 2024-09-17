@@ -88,9 +88,24 @@ var SendCmd = &cli.Command{
 		ctx := ReqContext(cctx)
 		var params SendParams
 
+		is0xRecipient := false
 		params.To, err = address.NewFromString(cctx.Args().Get(0))
 		if err != nil {
-			return ShowHelp(cctx, fmt.Errorf("failed to parse target address: %w", err))
+			// could be an ETH address
+			ea, err := ethtypes.ParseEthAddress(cctx.Args().Get(0))
+			if err != nil {
+				return ShowHelp(cctx, fmt.Errorf("failed to parse target address; address must be a valid FIL address or an ETH address: %w", err))
+			}
+			is0xRecipient = true
+			// this will be either "f410f..." or "f0..."
+			params.To, err = ea.ToFilecoinAddress()
+			if err != nil {
+				return ShowHelp(cctx, fmt.Errorf("failed to convert ETH address to FIL address: %w", err))
+			}
+			// ideally, this should never happen
+			if !(params.To.Protocol() == address.ID || params.To.Protocol() == address.Delegated) {
+				return ShowHelp(cctx, fmt.Errorf("ETH addresses can only map to a FIL addresses starting with f410f or f0"))
+			}
 		}
 
 		val, err := types.ParseFIL(cctx.Args().Get(1))
@@ -118,6 +133,12 @@ var SendCmd = &cli.Command{
 			}
 			fmt.Println("f4 addr: ", faddr)
 			params.From = faddr
+		} else {
+			defaddr, err := srv.FullNodeAPI().WalletDefaultAddress(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get default address: %w", err)
+			}
+			params.From = defaddr
 		}
 
 		if cctx.IsSet("params-hex") {
@@ -128,7 +149,7 @@ var SendCmd = &cli.Command{
 			params.Params = decparams
 		}
 
-		if ethtypes.IsEthAddress(params.From) {
+		if ethtypes.IsEthAddress(params.From) || is0xRecipient {
 			// Method numbers don't make sense from eth accounts.
 			if cctx.IsSet("method") {
 				return xerrors.Errorf("messages from f410f addresses may not specify a method number")
@@ -166,6 +187,8 @@ var SendCmd = &cli.Command{
 		} else {
 			params.Method = abi.MethodNum(cctx.Uint64("method"))
 		}
+
+		_, _ = fmt.Fprintf(cctx.App.Writer, "Sending message from: %s\nSending message to: %s\nUsing Method: %d\n", params.From.String(), params.To.String(), params.Method)
 
 		if cctx.IsSet("gas-premium") {
 			gp, err := types.BigFromString(cctx.String("gas-premium"))

@@ -20,13 +20,16 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
+	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/proofs"
 	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -34,8 +37,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/lib/async"
 	"github.com/filecoin-project/lotus/lib/sigs"
-	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
-	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 var log = logging.Logger("fil-consensus")
@@ -50,7 +51,7 @@ type FilecoinEC struct {
 	// the state manager handles making state queries
 	sm *stmgr.StateManager
 
-	verifier storiface.Verifier
+	verifier proofs.Verifier
 
 	genesis *types.TipSet
 }
@@ -94,7 +95,7 @@ var RewardFunc = func(ctx context.Context, vmi vm.Interface, em stmgr.ExecMonito
 	return nil
 }
 
-func NewFilecoinExpectedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier storiface.Verifier, genesis chain.Genesis) consensus.Consensus {
+func NewFilecoinExpectedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier proofs.Verifier, genesis chain.Genesis) consensus.Consensus {
 	if build.InsecurePoStValidation {
 		log.Warn("*********************************************************************************************")
 		log.Warn(" [INSECURE-POST-VALIDATION] Insecure test validation is enabled. If you see this outside of a test, it is a severe bug! ")
@@ -141,12 +142,12 @@ func (filec *FilecoinEC) ValidateBlock(ctx context.Context, b *types.FullBlock) 
 	}
 
 	nulls := h.Height - (baseTs.Height() + 1)
-	if tgtTs := baseTs.MinTimestamp() + build.BlockDelaySecs*uint64(nulls+1); h.Timestamp != tgtTs {
+	if tgtTs := baseTs.MinTimestamp() + buildconstants.BlockDelaySecs*uint64(nulls+1); h.Timestamp != tgtTs {
 		return xerrors.Errorf("block has wrong timestamp: %d != %d", h.Timestamp, tgtTs)
 	}
 
 	now := uint64(build.Clock.Now().Unix())
-	if h.Timestamp > now+build.AllowableClockDriftSecs {
+	if h.Timestamp > now+buildconstants.AllowableClockDriftSecs {
 		return xerrors.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
 	}
 	if h.Timestamp > now {
@@ -256,7 +257,7 @@ func (filec *FilecoinEC) ValidateBlock(ctx context.Context, b *types.FullBlock) 
 			return xerrors.Errorf("failed to marshal miner address to cbor: %w", err)
 		}
 
-		if h.Height > build.UpgradeSmokeHeight {
+		if h.Height > buildconstants.UpgradeSmokeHeight {
 			buf.Write(baseTs.MinTicket().VRFProof)
 		}
 
@@ -265,7 +266,7 @@ func (filec *FilecoinEC) ValidateBlock(ctx context.Context, b *types.FullBlock) 
 			beaconBase = h.BeaconEntries[len(h.BeaconEntries)-1]
 		}
 
-		vrfBase, err := rand.DrawRandomnessFromBase(beaconBase.Data, crypto.DomainSeparationTag_TicketProduction, h.Height-build.TicketRandomnessLookback, buf.Bytes())
+		vrfBase, err := rand.DrawRandomnessFromBase(beaconBase.Data, crypto.DomainSeparationTag_TicketProduction, h.Height-buildconstants.TicketRandomnessLookback, buf.Bytes())
 		if err != nil {
 			return xerrors.Errorf("failed to compute vrf base for ticket: %w", err)
 		}
@@ -367,7 +368,7 @@ func (filec *FilecoinEC) VerifyWinningPoStProof(ctx context.Context, nv network.
 		}
 	}
 
-	ok, err := ffiwrapper.ProofVerifier.VerifyWinningPoSt(ctx, proof.WinningPoStVerifyInfo{
+	ok, err := filec.verifier.VerifyWinningPoSt(ctx, proof.WinningPoStVerifyInfo{
 		Randomness:        rand,
 		Proofs:            h.WinPoStProof,
 		ChallengedSectors: sectors,
@@ -394,12 +395,12 @@ func (filec *FilecoinEC) IsEpochInConsensusRange(epoch abi.ChainEpoch) bool {
 	//
 	// We use _our_ current head, not the expected head, because the network's head can lag on
 	// catch-up (after a network outage).
-	if epoch < filec.store.GetHeaviestTipSet().Height()-build.Finality {
+	if epoch < filec.store.GetHeaviestTipSet().Height()-policy.ChainFinality {
 		return false
 	}
 
 	now := uint64(build.Clock.Now().Unix())
-	return epoch <= (abi.ChainEpoch((now-filec.genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
+	return epoch <= (abi.ChainEpoch((now-filec.genesis.MinTimestamp())/buildconstants.BlockDelaySecs) + MaxHeightDrift)
 }
 
 func (filec *FilecoinEC) minerIsValid(ctx context.Context, maddr address.Address, baseTs *types.TipSet) error {

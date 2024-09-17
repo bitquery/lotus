@@ -7,7 +7,7 @@ USAGE:
    lotus-miner [global options] command [command options] [arguments...]
 
 VERSION:
-   1.28.1
+   1.28.3-dev
 
 COMMANDS:
    init          Initialize a lotus miner repo
@@ -341,6 +341,7 @@ USAGE:
 
 COMMANDS:
    set-addresses, set-addrs    set addresses that your miner can be publicly dialed on
+   settle-deal                 Settle deals manually, if dealIds are not provided all deals will be settled
    withdraw                    withdraw available balance to beneficiary
    repay-debt                  pay down a miner's debt
    set-peer-id                 set the peer id of your miner
@@ -370,6 +371,19 @@ OPTIONS:
    --gas-limit value  set gas limit (default: 0)
    --unset            unset address (default: false)
    --help, -h         show help
+```
+
+### lotus-miner actor settle-deal
+```
+NAME:
+   lotus-miner actor settle-deal - Settle deals manually, if dealIds are not provided all deals will be settled
+
+USAGE:
+   lotus-miner actor settle-deal [command options] [...dealIds]
+
+OPTIONS:
+   --confidence value  number of block confirmations to wait for (default: 5)
+   --help, -h          show help
 ```
 
 ### lotus-miner actor withdraw

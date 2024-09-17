@@ -1,26 +1,23 @@
 //go:build debug || 2k
 // +build debug 2k
 
-package build
+package buildconstants
 
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/go-state-types/abi"
-	actorstypes "github.com/filecoin-project/go-state-types/actors"
 	"github.com/filecoin-project/go-state-types/network"
-
-	"github.com/filecoin-project/lotus/chain/actors/policy"
 )
 
 const BootstrappersFile = ""
 const GenesisFile = ""
 
 var NetworkBundle = "devnet"
-var BundleOverrides map[actorstypes.Version]string
 var ActorDebugging = true
 
 var GenesisNetworkVersion = network.Version22
@@ -91,15 +88,9 @@ var SupportedProofTypes = []abi.RegisteredSealProof{
 	abi.RegisteredSealProof_StackedDrg8MiBV1,
 }
 var ConsensusMinerMinPower = abi.NewStoragePower(2048)
-var MinVerifiedDealSize = abi.NewStoragePower(256)
 var PreCommitChallengeDelay = abi.ChainEpoch(10)
 
 func init() {
-	policy.SetSupportedProofTypes(SupportedProofTypes...)
-	policy.SetConsensusMinerMinPower(ConsensusMinerMinPower)
-	policy.SetMinVerifiedDealSize(MinVerifiedDealSize)
-	policy.SetPreCommitChallengeDelay(PreCommitChallengeDelay)
-
 	getGenesisNetworkVersion := func(ev string, def network.Version) network.Version {
 		hs, found := os.LookupEnv(ev)
 		if found {
@@ -115,6 +106,15 @@ func init() {
 	}
 
 	GenesisNetworkVersion = getGenesisNetworkVersion("LOTUS_GENESIS_NETWORK_VERSION", GenesisNetworkVersion)
+
+	getBoolean := func(ev string, def bool) bool {
+		hs, found := os.LookupEnv(ev)
+		if found {
+			return hs == "1" || strings.ToLower(hs) == "true"
+		}
+
+		return def
+	}
 
 	getUpgradeHeight := func(ev string, def abi.ChainEpoch) abi.ChainEpoch {
 		hs, found := os.LookupEnv(ev)
@@ -162,6 +162,9 @@ func init() {
 		0: DrandQuicknet,
 	}
 
+	F3Enabled = getBoolean("LOTUS_F3_ENABLED", F3Enabled)
+	F3BootstrapEpoch = getUpgradeHeight("LOTUS_F3_BOOTSTRAP_EPOCH", F3BootstrapEpoch)
+
 	BuildType |= Build2k
 
 }
@@ -189,6 +192,8 @@ const Eip155ChainId = 31415926
 
 var WhitelistedBlock = cid.Undef
 
-const f3Enabled = true
+var F3Enabled = true
+
 const ManifestServerID = "12D3KooWHcNBkqXEBrsjoveQvj6zDF3vK5S9tAfqyYaQF1LGSJwG"
-const F3BootstrapEpoch abi.ChainEpoch = 1000
+
+var F3BootstrapEpoch abi.ChainEpoch = 1000
