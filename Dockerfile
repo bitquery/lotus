@@ -1,8 +1,12 @@
-FROM golang:1.21.7-bullseye AS builder
-MAINTAINER BitQuery
+#####################################
+FROM golang:1.22.7-bullseye AS lotus-builder
+MAINTAINER Lotus Development Team
 
 RUN apt-get update && apt-get install -y ca-certificates build-essential clang ocl-icd-opencl-dev ocl-icd-libopencl1 jq libhwloc-dev
 
+ENV XDG_CACHE_HOME="/tmp"
+
+### taken from https://github.com/rust-lang/docker-rust/blob/master/1.63.0/buster/Dockerfile
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH \
@@ -40,41 +44,31 @@ ARG GOFLAGS=""
 
 RUN make buildall
 
+#####################################
+FROM ubuntu:20.04 AS lotus-base
+MAINTAINER Lotus Development Team
 
-FROM ubuntu:20.04 AS base
-MAINTAINER BitQuery
-
-COPY --from=builder /etc/ssl/certs            /etc/ssl/certs
-COPY --from=builder /lib/*/libdl.so.2 \
-   /lib/*/librt.so.1 \
-   /lib/*/libgcc_s.so.1 \
-   /lib/*/libutil.so.1 \
-   /usr/lib/*/libltdl.so.7 \
-   /usr/lib/*/libnuma.so.1 \
-   /usr/lib/*/libhwloc.so.5 \
-   /usr/lib/*/libOpenCL.so.1 \
-   /lib/
-COPY --from=builder /etc/ssl/certs                           /etc/ssl/certs
-COPY --from=builder /lib/*/libdl.so.2         /lib/
-COPY --from=builder /lib/*/librt.so.1         /lib/
-COPY --from=builder /lib/*/libgcc_s.so.1      /lib/
-COPY --from=builder /lib/*/libutil.so.1       /lib/
-COPY --from=builder /usr/lib/*/libltdl.so.7   /lib/
-COPY --from=builder /usr/lib/*/libnuma.so.1   /lib/
-COPY --from=builder /usr/lib/*/libhwloc.so.*  /lib/
-COPY --from=builder /usr/lib/*/libOpenCL.so.1 /lib/
+# Base resources
+COPY --from=lotus-builder /etc/ssl/certs                           /etc/ssl/certs
+COPY --from=lotus-builder /lib/*/libdl.so.2         /lib/
+COPY --from=lotus-builder /lib/*/librt.so.1         /lib/
+COPY --from=lotus-builder /lib/*/libgcc_s.so.1      /lib/
+COPY --from=lotus-builder /lib/*/libutil.so.1       /lib/
+COPY --from=lotus-builder /usr/lib/*/libltdl.so.7   /lib/
+COPY --from=lotus-builder /usr/lib/*/libnuma.so.1   /lib/
+COPY --from=lotus-builder /usr/lib/*/libhwloc.so.*  /lib/
+COPY --from=lotus-builder /usr/lib/*/libOpenCL.so.1 /lib/
 
 RUN useradd -r -u 532 -U fc \
  && mkdir -p /etc/OpenCL/vendors \
  && echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
 
+#####################################
+FROM lotus-base AS lotus
+MAINTAINER Lotus Development Team
 
-
-FROM base AS lotus
-MAINTAINER BitQuery
-
-COPY --from=builder /opt/filecoin/lotus /usr/local/bin/
-COPY --from=builder /opt/filecoin/lotus-shed /usr/local/bin/
+COPY --from=lotus-builder /opt/filecoin/lotus /usr/local/bin/
+COPY --from=lotus-builder /opt/filecoin/lotus-shed /usr/local/bin/
 COPY scripts/docker-lotus-entrypoint.sh /
 
 #ARG DOCKER_LOTUS_IMPORT_SNAPSHOT=https://forest-archive.chainsafe.dev/latest/mainnet/
