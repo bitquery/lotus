@@ -587,9 +587,10 @@ type FullNode interface {
 	// StateGetRandomnessDigestFromBeacon is used to sample the beacon for randomness.
 	StateGetRandomnessDigestFromBeacon(ctx context.Context, randEpoch abi.ChainEpoch, tsk types.TipSetKey) (abi.Randomness, error) //perm:read
 
-	// StateGetBeaconEntry returns the beacon entry for the given filecoin epoch. If
-	// the entry has not yet been produced, the call will block until the entry
-	// becomes available
+	// StateGetBeaconEntry returns the beacon entry for the given filecoin epoch
+	// by using the recorded entries on the chain. If the entry for the requested
+	// epoch has not yet been produced, the call will block until the entry
+	// becomes available.
 	StateGetBeaconEntry(ctx context.Context, epoch abi.ChainEpoch) (*types.BeaconEntry, error) //perm:read
 
 	// StateGetNetworkParams return current network params
@@ -776,6 +777,8 @@ type FullNode interface {
 	EthGetMessageCidByTransactionHash(ctx context.Context, txHash *ethtypes.EthHash) (*cid.Cid, error)                                          //perm:read
 	EthGetTransactionCount(ctx context.Context, sender ethtypes.EthAddress, blkParam ethtypes.EthBlockNumberOrHash) (ethtypes.EthUint64, error) //perm:read
 	EthGetTransactionReceipt(ctx context.Context, txHash ethtypes.EthHash) (*EthTxReceipt, error)                                               //perm:read
+	EthGetBlockReceipts(ctx context.Context, blkParam ethtypes.EthBlockNumberOrHash) ([]*EthTxReceipt, error)                                   //perm:read
+	EthGetBlockReceiptsLimited(ctx context.Context, blkParam ethtypes.EthBlockNumberOrHash, limit abi.ChainEpoch) ([]*EthTxReceipt, error)      //perm:read
 	EthGetTransactionReceiptLimited(ctx context.Context, txHash ethtypes.EthHash, limit abi.ChainEpoch) (*EthTxReceipt, error)                  //perm:read
 	EthGetTransactionByBlockHashAndIndex(ctx context.Context, blkHash ethtypes.EthHash, txIndex ethtypes.EthUint64) (ethtypes.EthTx, error)     //perm:read
 	EthGetTransactionByBlockNumberAndIndex(ctx context.Context, blkNum ethtypes.EthUint64, txIndex ethtypes.EthUint64) (ethtypes.EthTx, error)  //perm:read
