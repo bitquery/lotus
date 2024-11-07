@@ -103,7 +103,6 @@ type EthEventAPI interface {
 var (
 	_ EthModuleAPI = *new(api.FullNode)
 	_ EthEventAPI  = *new(api.FullNode)
-
 	_ EthModuleAPI = *new(api.Gateway)
 )
 
@@ -138,7 +137,7 @@ type EthModule struct {
 	Chain                    *store.ChainStore
 	Mpool                    *messagepool.MessagePool
 	StateManager             *stmgr.StateManager
-	EthTxHashManager         *EthTxHashManager
+	EthTxHashManager         EthTxHashManager
 	EthTraceFilterMaxResults uint64
 	EthEventHandler          *EthEventHandler
 
@@ -169,8 +168,10 @@ var _ EthEventAPI = (*EthEventHandler)(nil)
 type EthAPI struct {
 	fx.In
 
-	Chain        *store.ChainStore
-	StateManager *stmgr.StateManager
+	Chain            *store.ChainStore
+	StateManager     *stmgr.StateManager
+	EthTxHashManager EthTxHashManager
+	MpoolAPI         MpoolAPI
 
 	EthModuleAPI
 	EthEventAPI
@@ -358,7 +359,7 @@ func (a *EthModule) EthGetTransactionByHashLimited(ctx context.Context, txHash *
 		return nil, nil
 	}
 
-	c, err := a.EthTxHashManager.TransactionHashLookup.GetCidFromHash(*txHash)
+	c, err := a.EthTxHashManager.GetCidFromHash(*txHash)
 	if err != nil {
 		log.Debug("could not find transaction hash %s in lookup table", txHash.String())
 	}
@@ -417,7 +418,7 @@ func (a *EthModule) EthGetMessageCidByTransactionHash(ctx context.Context, txHas
 		return nil, nil
 	}
 
-	c, err := a.EthTxHashManager.TransactionHashLookup.GetCidFromHash(*txHash)
+	c, err := a.EthTxHashManager.GetCidFromHash(*txHash)
 	// We fall out of the first condition and continue
 	if errors.Is(err, ethhashlookup.ErrNotFound) {
 		log.Debug("could not find transaction hash %s in lookup table", txHash.String())
@@ -461,21 +462,35 @@ func (a *EthModule) EthGetTransactionHashByCid(ctx context.Context, cid cid.Cid)
 func (a *EthModule) EthGetTransactionCount(ctx context.Context, sender ethtypes.EthAddress, blkParam ethtypes.EthBlockNumberOrHash) (ethtypes.EthUint64, error) {
 	addr, err := sender.ToFilecoinAddress()
 	if err != nil {
-		return ethtypes.EthUint64(0), nil
+		return ethtypes.EthUint64(0), xerrors.Errorf("invalid address: %w", err)
 	}
 
+	// Handle "pending" block parameter separately
+	if blkParam.PredefinedBlock != nil && *blkParam.PredefinedBlock == "pending" {
+		nonce, err := a.MpoolAPI.MpoolGetNonce(ctx, addr)
+		if err != nil {
+			return ethtypes.EthUint64(0), xerrors.Errorf("failed to get nonce from mpool: %w", err)
+		}
+		return ethtypes.EthUint64(nonce), nil
+	}
+
+	// For all other cases, get the tipset based on the block parameter
 	ts, err := getTipsetByEthBlockNumberOrHash(ctx, a.Chain, blkParam)
 	if err != nil {
 		return ethtypes.EthUint64(0), xerrors.Errorf("failed to process block param: %v; %w", blkParam, err)
 	}
 
-	// First, handle the case where the "sender" is an EVM actor.
-	if actor, err := a.StateManager.LoadActor(ctx, addr, ts); err != nil {
-		if xerrors.Is(err, types.ErrActorNotFound) {
+	// Get the actor state at the specified tipset
+	actor, err := a.StateManager.LoadActor(ctx, addr, ts)
+	if err != nil {
+		if errors.Is(err, types.ErrActorNotFound) {
 			return 0, nil
 		}
-		return 0, xerrors.Errorf("failed to lookup contract %s: %w", sender, err)
-	} else if builtinactors.IsEvmActor(actor.Code) {
+		return 0, xerrors.Errorf("failed to lookup actor %s: %w", sender, err)
+	}
+
+	// Handle EVM actor case
+	if builtinactors.IsEvmActor(actor.Code) {
 		evmState, err := builtinevm.Load(a.Chain.ActorStore(ctx), actor)
 		if err != nil {
 			return 0, xerrors.Errorf("failed to load evm state: %w", err)
@@ -489,11 +504,8 @@ func (a *EthModule) EthGetTransactionCount(ctx context.Context, sender ethtypes.
 		return ethtypes.EthUint64(nonce), err
 	}
 
-	nonce, err := a.Mpool.GetNonce(ctx, addr, ts.Key())
-	if err != nil {
-		return ethtypes.EthUint64(0), nil
-	}
-	return ethtypes.EthUint64(nonce), nil
+	// For non-EVM actors, get the nonce from the actor state
+	return ethtypes.EthUint64(actor.Nonce), nil
 }
 
 func (a *EthModule) EthGetTransactionReceipt(ctx context.Context, txHash ethtypes.EthHash) (*api.EthTxReceipt, error) {
@@ -501,7 +513,7 @@ func (a *EthModule) EthGetTransactionReceipt(ctx context.Context, txHash ethtype
 }
 
 func (a *EthModule) EthGetTransactionReceiptLimited(ctx context.Context, txHash ethtypes.EthHash, limit abi.ChainEpoch) (*api.EthTxReceipt, error) {
-	c, err := a.EthTxHashManager.TransactionHashLookup.GetCidFromHash(txHash)
+	c, err := a.EthTxHashManager.GetCidFromHash(txHash)
 	if err != nil {
 		log.Debug("could not find transaction hash %s in lookup table", txHash.String())
 	}
@@ -631,7 +643,7 @@ func (a *EthModule) EthGetCode(ctx context.Context, ethAddr ethtypes.EthAddress,
 
 	actor, err := a.StateManager.LoadActor(ctx, to, ts)
 	if err != nil {
-		if xerrors.Is(err, types.ErrActorNotFound) {
+		if errors.Is(err, types.ErrActorNotFound) {
 			return nil, nil
 		}
 		return nil, xerrors.Errorf("failed to lookup contract %s: %w", ethAddr, err)
@@ -724,7 +736,7 @@ func (a *EthModule) EthGetStorageAt(ctx context.Context, ethAddr ethtypes.EthAdd
 
 	actor, err := a.StateManager.LoadActor(ctx, to, ts)
 	if err != nil {
-		if xerrors.Is(err, types.ErrActorNotFound) {
+		if errors.Is(err, types.ErrActorNotFound) {
 			return ethtypes.EthBytes(make([]byte, 32)), nil
 		}
 		return nil, xerrors.Errorf("failed to lookup contract %s: %w", ethAddr, err)
@@ -805,7 +817,7 @@ func (a *EthModule) EthGetBalance(ctx context.Context, address ethtypes.EthAddre
 	}
 
 	actor, err := a.StateManager.LoadActorRaw(ctx, filAddr, st)
-	if xerrors.Is(err, types.ErrActorNotFound) {
+	if errors.Is(err, types.ErrActorNotFound) {
 		return ethtypes.EthBigIntZero, nil
 	} else if err != nil {
 		return ethtypes.EthBigInt{}, err
@@ -990,6 +1002,14 @@ func (a *EthModule) EthGasPrice(ctx context.Context) (ethtypes.EthBigInt, error)
 }
 
 func (a *EthModule) EthSendRawTransaction(ctx context.Context, rawTx ethtypes.EthBytes) (ethtypes.EthHash, error) {
+	return ethSendRawTransaction(ctx, a.MpoolAPI, a.EthTxHashManager, rawTx, false)
+}
+
+func (a *EthAPI) EthSendRawTransactionUntrusted(ctx context.Context, rawTx ethtypes.EthBytes) (ethtypes.EthHash, error) {
+	return ethSendRawTransaction(ctx, a.MpoolAPI, a.EthTxHashManager, rawTx, true)
+}
+
+func ethSendRawTransaction(ctx context.Context, mpool MpoolAPI, ethTxHashManager EthTxHashManager, rawTx ethtypes.EthBytes, untrusted bool) (ethtypes.EthHash, error) {
 	txArgs, err := ethtypes.ParseEthTransaction(rawTx)
 	if err != nil {
 		return ethtypes.EmptyEthHash, err
@@ -1005,14 +1025,19 @@ func (a *EthModule) EthSendRawTransaction(ctx context.Context, rawTx ethtypes.Et
 		return ethtypes.EmptyEthHash, err
 	}
 
-	_, err = a.MpoolAPI.MpoolPush(ctx, smsg)
-	if err != nil {
-		return ethtypes.EmptyEthHash, err
+	if untrusted {
+		if _, err = mpool.MpoolPushUntrusted(ctx, smsg); err != nil {
+			return ethtypes.EmptyEthHash, err
+		}
+	} else {
+		if _, err = mpool.MpoolPush(ctx, smsg); err != nil {
+			return ethtypes.EmptyEthHash, err
+		}
 	}
 
 	// make it immediately available in the transaction hash lookup db, even though it will also
 	// eventually get there via the mpool
-	if err := a.EthTxHashManager.TransactionHashLookup.UpsertHash(txHash, smsg.Cid()); err != nil {
+	if err := ethTxHashManager.UpsertHash(txHash, smsg.Cid()); err != nil {
 		log.Errorf("error inserting tx mapping to db: %s", err)
 	}
 
@@ -1691,14 +1716,12 @@ func (e *EthEventHandler) ethGetEventsForFilter(ctx context.Context, filterSpec 
 		}
 	}
 
-	// Create a temporary filter
-	f, err := e.EventFilterManager.Install(ctx, pf.minHeight, pf.maxHeight, pf.tipsetCid, pf.addresses, pf.keys, false)
+	// Fill a filter and collect events
+	f, err := e.EventFilterManager.Fill(ctx, pf.minHeight, pf.maxHeight, pf.tipsetCid, pf.addresses, pf.keys)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to install event filter: %w", err)
 	}
 	ces := f.TakeCollectedEvents(ctx)
-
-	_ = e.uninstallFilter(ctx, f)
 
 	return ces, nil
 }
@@ -1921,7 +1944,7 @@ func (e *EthEventHandler) EthNewFilter(ctx context.Context, filterSpec *ethtypes
 		return ethtypes.EthFilterID{}, err
 	}
 
-	f, err := e.EventFilterManager.Install(ctx, pf.minHeight, pf.maxHeight, pf.tipsetCid, pf.addresses, pf.keys, true)
+	f, err := e.EventFilterManager.Install(ctx, pf.minHeight, pf.maxHeight, pf.tipsetCid, pf.addresses, pf.keys)
 	if err != nil {
 		return ethtypes.EthFilterID{}, xerrors.Errorf("failed to install event filter: %w", err)
 	}
@@ -2087,7 +2110,7 @@ func (e *EthEventHandler) EthSubscribe(ctx context.Context, p jsonrpc.RawParams)
 			}
 		}
 
-		f, err := e.EventFilterManager.Install(ctx, -1, -1, cid.Undef, addresses, keysToKeysWithCodec(keys), true)
+		f, err := e.EventFilterManager.Install(ctx, -1, -1, cid.Undef, addresses, keysToKeysWithCodec(keys))
 		if err != nil {
 			// clean up any previous filters added and stop the sub
 			_, _ = e.EthUnsubscribe(ctx, sub.id)

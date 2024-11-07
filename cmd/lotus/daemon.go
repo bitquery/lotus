@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/DataDog/zstd"
+	"github.com/cheggaaa/pb/v3"
 	metricsprom "github.com/ipfs/go-metrics-prometheus"
 	"github.com/mitchellh/go-homedir"
 	"github.com/multiformats/go-multiaddr"
@@ -25,7 +26,6 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	"golang.org/x/xerrors"
-	"gopkg.in/cheggaaa/pb.v1"
 
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-paramfetch"
@@ -512,9 +512,13 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 		if err != nil {
 			return xerrors.Errorf("fetching chain CAR failed: setting up resumable reader: %w", err)
 		}
+		defer rrd.Close() //nolint:errcheck
 
-		rd = rrd
 		l = rrd.ContentLength()
+		// without limiting the reader to exactly what we expect, an overread could
+		// result in a virtually freeform remote-error which we would then be unable
+		// to handle properly on our end
+		rd = io.LimitReader(rrd, l)
 	} else {
 		fname, err = homedir.Expand(fname)
 		if err != nil {
@@ -569,12 +573,8 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 		return xerrors.Errorf("peek header: %w", err)
 	}
 
-	bar := pb.New64(l)
+	bar := pb.Full.New(int(l))
 	br := bar.NewProxyReader(bufr)
-	bar.ShowTimeLeft = true
-	bar.ShowPercent = true
-	bar.ShowSpeed = true
-	bar.Units = pb.U_BYTES
 
 	var ir io.Reader = br
 

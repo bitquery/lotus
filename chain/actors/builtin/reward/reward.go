@@ -6,7 +6,7 @@ import (
 
 	"github.com/filecoin-project/go-state-types/abi"
 	actorstypes "github.com/filecoin-project/go-state-types/actors"
-	builtin14 "github.com/filecoin-project/go-state-types/builtin"
+	builtin15 "github.com/filecoin-project/go-state-types/builtin"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/manifest"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	Address = builtin14.RewardActorAddr
-	Methods = builtin14.MethodsReward
+	Address = builtin15.RewardActorAddr
+	Methods = builtin15.MethodsReward
 )
 
 func Load(store adt.Store, act *types.Actor) (State, error) {
@@ -57,6 +57,9 @@ func Load(store adt.Store, act *types.Actor) (State, error) {
 
 		case actorstypes.Version14:
 			return load14(store, act.Head)
+
+		case actorstypes.Version15:
+			return load15(store, act.Head)
 
 		}
 	}
@@ -134,6 +137,9 @@ func MakeState(store adt.Store, av actorstypes.Version, currRealizedPower abi.St
 	case actorstypes.Version14:
 		return make14(store, currRealizedPower)
 
+	case actorstypes.Version15:
+		return make15(store, currRealizedPower)
+
 	}
 	return nil, xerrors.Errorf("unknown actor version %d", av)
 }
@@ -157,7 +163,14 @@ type State interface {
 	CumsumBaseline() (abi.StoragePower, error)
 	CumsumRealized() (abi.StoragePower, error)
 
-	InitialPledgeForPower(abi.StoragePower, abi.TokenAmount, *builtin.FilterEstimate, abi.TokenAmount) (abi.TokenAmount, error)
+	// InitialPledgeForPower computes the pledge requirement for committing new quality-adjusted power
+	// to the network, given the current network total and baseline power, per-epoch  reward, and
+	// circulating token supply.
+	//
+	// Prior to actors version 15, the epochsSinceRampStart and rampDurationEpochs arguments have
+	// no effect. After actors version 15, these values can be derived from the power actor state
+	// properties RampStartEpoch and RampDurationEpochs.
+	InitialPledgeForPower(qaPower abi.StoragePower, networkTotalPledge abi.TokenAmount, networkQAPower *builtin.FilterEstimate, circSupply abi.TokenAmount, epochsSinceRampStart int64, rampDurationEpochs uint64) (abi.TokenAmount, error)
 	PreCommitDepositForPower(builtin.FilterEstimate, abi.StoragePower) (abi.TokenAmount, error)
 	GetState() interface{}
 }
@@ -180,5 +193,6 @@ func AllCodes() []cid.Cid {
 		(&state12{}).Code(),
 		(&state13{}).Code(),
 		(&state14{}).Code(),
+		(&state15{}).Code(),
 	}
 }

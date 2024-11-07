@@ -75,6 +75,7 @@
   * [EthNewPendingTransactionFilter](#EthNewPendingTransactionFilter)
   * [EthProtocolVersion](#EthProtocolVersion)
   * [EthSendRawTransaction](#EthSendRawTransaction)
+  * [EthSendRawTransactionUntrusted](#EthSendRawTransactionUntrusted)
   * [EthSubscribe](#EthSubscribe)
   * [EthSyncing](#EthSyncing)
   * [EthTraceBlock](#EthTraceBlock)
@@ -88,6 +89,11 @@
   * [F3GetECPowerTable](#F3GetECPowerTable)
   * [F3GetF3PowerTable](#F3GetF3PowerTable)
   * [F3GetLatestCertificate](#F3GetLatestCertificate)
+  * [F3GetManifest](#F3GetManifest)
+  * [F3GetOrRenewParticipationTicket](#F3GetOrRenewParticipationTicket)
+  * [F3GetProgress](#F3GetProgress)
+  * [F3IsRunning](#F3IsRunning)
+  * [F3ListParticipants](#F3ListParticipants)
   * [F3Participate](#F3Participate)
 * [Filecoin](#Filecoin)
   * [FilecoinAddressToEthAddress](#FilecoinAddressToEthAddress)
@@ -240,6 +246,7 @@
   * [StateMinerFaults](#StateMinerFaults)
   * [StateMinerInfo](#StateMinerInfo)
   * [StateMinerInitialPledgeCollateral](#StateMinerInitialPledgeCollateral)
+  * [StateMinerInitialPledgeForSector](#StateMinerInitialPledgeForSector)
   * [StateMinerPartitions](#StateMinerPartitions)
   * [StateMinerPower](#StateMinerPower)
   * [StateMinerPreCommitDepositForPower](#StateMinerPreCommitDepositForPower)
@@ -2088,6 +2095,21 @@ Inputs:
 
 Response: `"0x37690cfec6c1bf4c3b9288c7a5d783e98731e90b0a4c177c2a374c7a9427355e"`
 
+### EthSendRawTransactionUntrusted
+EthSendRawTransactionUntrusted sends a transaction from and untrusted source, using MpoolPushUntrusted to submit the message.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "0x07"
+]
+```
+
+Response: `"0x37690cfec6c1bf4c3b9288c7a5d783e98731e90b0a4c177c2a374c7a9427355e"`
+
 ### EthSubscribe
 Subscribe to different event types using websockets
 eventTypes is one or more of:
@@ -2318,7 +2340,7 @@ Response: `true`
 
 
 ### F3GetCertificate
-F3GetCertificate returns a finality certificate at given instance number
+F3GetCertificate returns a finality certificate at given instance.
 
 
 Perms: read
@@ -2443,7 +2465,7 @@ Response:
 ```
 
 ### F3GetLatestCertificate
-F3GetLatestCertificate returns the latest finality certificate
+F3GetLatestCertificate returns the latest finality certificate.
 
 
 Perms: read
@@ -2500,19 +2522,73 @@ Response:
 }
 ```
 
-### F3Participate
-F3Participate should be called by a storage provider to participate in signing F3 consensus.
-Calling this API gives the lotus node a lease to sign in F3 on behalf of given SP.
-The lease should be active only on one node. The lease will expire at the newLeaseExpiration.
-To continue participating in F3 with the given node, call F3Participate again before
-the newLeaseExpiration time.
-newLeaseExpiration cannot be further than 5 minutes in the future.
-It is recommended to call F3Participate every 60 seconds
-with newLeaseExpiration set 2min into the future.
-The oldLeaseExpiration has to be set to newLeaseExpiration of the last successful call.
-For the first call to F3Participate, set the oldLeaseExpiration to zero value/time in the past.
-F3Participate will return true if the lease was accepted.
-The minerID has to be the ID address of the miner.
+### F3GetManifest
+F3GetManifest returns the current manifest being used for F3 operations.
+
+
+Perms: read
+
+Inputs: `null`
+
+Response:
+```json
+{
+  "Pause": false,
+  "ProtocolVersion": 0,
+  "InitialInstance": 0,
+  "BootstrapEpoch": 0,
+  "NetworkName": "",
+  "ExplicitPower": null,
+  "IgnoreECPower": false,
+  "InitialPowerTable": null,
+  "CommitteeLookback": 0,
+  "CatchUpAlignment": 0,
+  "Gpbft": {
+    "Delta": 0,
+    "DeltaBackOffExponent": 0,
+    "MaxLookaheadRounds": 0,
+    "RebroadcastBackoffBase": 0,
+    "RebroadcastBackoffExponent": 0,
+    "RebroadcastBackoffSpread": 0,
+    "RebroadcastBackoffMax": 0
+  },
+  "EC": {
+    "Period": 0,
+    "Finality": 0,
+    "DelayMultiplier": 0,
+    "BaseDecisionBackoffTable": null,
+    "HeadLookback": 0,
+    "Finalize": false
+  },
+  "CertificateExchange": {
+    "ClientRequestTimeout": 0,
+    "ServerRequestTimeout": 0,
+    "MinimumPollInterval": 0,
+    "MaximumPollInterval": 0
+  }
+}
+```
+
+### F3GetOrRenewParticipationTicket
+F3GetOrRenewParticipationTicket retrieves or renews a participation ticket
+necessary for a miner to engage in the F3 consensus process for the given
+number of instances.
+
+This function accepts an optional previous ticket. If provided, a new ticket
+will be issued only under one the following conditions:
+  1. The previous ticket has expired.
+  2. The issuer of the previous ticket matches the node processing this
+     request.
+
+If there is an issuer mismatch (ErrF3ParticipationIssuerMismatch), the miner
+must retry obtaining a new ticket to ensure it is only participating in one F3
+instance at any time. The number of instances must be at least 1. If the
+number of instances is beyond the maximum leasable participation instances
+accepted by the node ErrF3ParticipationTooManyInstances is returned.
+
+Note: Successfully acquiring a ticket alone does not constitute participation.
+The retrieved ticket must be used to invoke F3Participate to actively engage
+in the F3 consensus process.
 
 
 Perms: sign
@@ -2521,12 +2597,101 @@ Inputs:
 ```json
 [
   "f01234",
-  "0001-01-01T00:00:00Z",
-  "0001-01-01T00:00:00Z"
+  "Bw==",
+  42
 ]
 ```
 
+Response: `"Bw=="`
+
+### F3GetProgress
+F3GetProgress returns the progress of the current F3 instance in terms of instance ID, round and phase.
+
+
+Perms: read
+
+Inputs: `null`
+
+Response:
+```json
+{
+  "ID": 42,
+  "Round": 42,
+  "Phase": 0
+}
+```
+
+### F3IsRunning
+F3IsRunning returns true if the F3 instance is running, false if it's not running but
+it's enabled, and an error when disabled entirely.
+
+
+Perms: read
+
+Inputs: `null`
+
 Response: `true`
+
+### F3ListParticipants
+F3ListParticipants returns the list of miners that are currently participating in F3 via this node.
+
+
+Perms: read
+
+Inputs: `null`
+
+Response:
+```json
+[
+  {
+    "MinerID": 42,
+    "FromInstance": 42,
+    "ValidityTerm": 42
+  }
+]
+```
+
+### F3Participate
+F3Participate enrolls a storage provider in the F3 consensus process using a
+provided participation ticket. This ticket grants a temporary lease that enables
+the provider to sign transactions as part of the F3 consensus.
+
+The function verifies the ticket's validity and checks if the ticket's issuer
+aligns with the current node. If there is an issuer mismatch
+(ErrF3ParticipationIssuerMismatch), the provider should retry with the same
+ticket, assuming the issue is due to transient network problems or operational
+deployment conditions. If the ticket is invalid
+(ErrF3ParticipationTicketInvalid) or has expired
+(ErrF3ParticipationTicketExpired), the provider must obtain a new ticket by
+calling F3GetOrRenewParticipationTicket.
+
+The start instance associated to the given ticket cannot be less than the
+start instance of any existing lease held by the miner. Otherwise,
+ErrF3ParticipationTicketStartBeforeExisting is returned. In this case, the
+miner should acquire a new ticket before attempting to participate again.
+
+For details on obtaining or renewing a ticket, see F3GetOrRenewParticipationTicket.
+
+
+Perms: sign
+
+Inputs:
+```json
+[
+  "Bw=="
+]
+```
+
+Response:
+```json
+{
+  "Network": "filecoin",
+  "Issuer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+  "MinerID": 1234,
+  "FromInstance": 10,
+  "ValidityTerm": 15
+}
+```
 
 ## Filecoin
 
@@ -5649,7 +5814,7 @@ Perms: read
 Inputs:
 ```json
 [
-  23
+  24
 ]
 ```
 
@@ -5664,7 +5829,7 @@ Perms: read
 Inputs:
 ```json
 [
-  23
+  24
 ]
 ```
 
@@ -6576,7 +6741,8 @@ Response:
     "UpgradeWatermelonHeight": 10101,
     "UpgradeDragonHeight": 10101,
     "UpgradePhoenixHeight": 10101,
-    "UpgradeWaffleHeight": 10101
+    "UpgradeWaffleHeight": 10101,
+    "UpgradeTuktukHeight": 10101
   },
   "Eip155ChainID": 123
 }
@@ -7189,7 +7355,14 @@ Response:
 ```
 
 ### StateMinerInitialPledgeCollateral
-StateMinerInitialPledgeCollateral returns the initial pledge collateral for the specified miner's sector
+StateMinerInitialPledgeCollateral attempts to calculate the initial pledge collateral based on a SectorPreCommitInfo.
+This method uses the DealIDs field in SectorPreCommitInfo to determine the amount of verified
+deal space in the sector in order to perform a QAP calculation. Since network version 22 and
+the introduction of DDO, the DealIDs field can no longer be used to reliably determine verified
+deal space; therefore, this method is deprecated. Use StateMinerInitialPledgeForSector instead
+and pass in the verified deal space directly.
+
+Deprecated: Use StateMinerInitialPledgeForSector instead.
 
 
 Perms: read
@@ -7213,6 +7386,34 @@ Inputs:
       "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
     }
   },
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response: `"0"`
+
+### StateMinerInitialPledgeForSector
+StateMinerInitialPledgeForSector returns the initial pledge collateral for a given sector
+duration, size, and combined size of any verified pieces within the sector. This calculation
+depends on current network conditions (total power, total pledge and current rewards) at the
+given tipset.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  10101,
+  34359738368,
+  42,
   [
     {
       "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
@@ -7556,7 +7757,7 @@ Inputs:
 ]
 ```
 
-Response: `23`
+Response: `24`
 
 ### StateReadState
 StateReadState returns the indicated actor's state.

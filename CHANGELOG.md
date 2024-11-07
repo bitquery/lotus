@@ -1,5 +1,128 @@
 # Lotus changelog
 
+# Node and Miner v1.30.0 / 2024-11-06
+
+This is the final release of the MANDATORY Lotus v1.30.0 release, which delivers the Filecoin network version 24, codenamed Tuk Tuk 🛺. **This release sets the Mainnet to upgrade at epoch `4461240`, corresponding to `2024-11-20T23:00:00Z`.**
+
+## ☢️ Upgrade Warnings ☢️
+
+- If you are running the v1.28.x version of Lotus, please go through the Upgrade Warnings section for the v1.28.* releases and v1.29.*, before upgrading to this release.
+- This release requires a minimum Go version of v1.22.7 or higher.
+- The `releases` branch has been deprecated with the 202408 split of 'Lotus Node' and 'Lotus Miner'. See https://github.com/filecoin-project/lotus/blob/master/LOTUS_RELEASE_FLOW.md#why-is-the-releases-branch-deprecated-and-what-are-alternatives for more info and alternatives for getting the latest release for both the 'Lotus Node' and 'Lotus Miner' based on the Branch and Tag Strategy.
+   - To get the latest Lotus Node tag: git tag -l 'v*' | sort -V -r | head -n 1
+   - To get the latest Lotus Miner tag: git tag -l 'miner/v*' | sort -V -r | head -n 1
+
+## 🏛️ Filecoin network version 24 FIPs
+
+- [FIP-0081: Introduce lower bound for sector initial pledge](https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0081.md)
+- [FIP-0094: Add Support for EIP-5656 (MCOPY Opcode) in the FEVM](https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0094.md)
+- [FIP-0095: Add FEVM precompile to fetch beacon digest from chain history](https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0095.md)
+
+*⚠️ The activation of F3 (Fast Finality) has been postponed for mainnet* due to unresolved issues in the Client/SP code and the F3 protocol itself. These issues require further testing and resolution before we can safely deploy F3 on the mainnet. Read the full [post here](https://github.com/filecoin-project/community/discussions/74?sort=new#discussioncomment-11164349).
+
+## 📦 v15 Builtin Actor Bundle
+
+The [v15.0.0](https://github.com/filecoin-project/builtin-actors/releases/tag/v15.0.0) actor bundle is used for supporting this upgrade. Make sure that your Lotus actor bundle matches the v15 actors manifest by running the following cli after upgrading to this release:
+
+```
+lotus state actor-cids --network-version=24
+Network Version: 24
+Actor Version: 15
+Manifest CID: bafy2bzaceakwje2hyinucrhgtsfo44p54iw4g6otbv5ghov65vajhxgntr53u
+
+Actor             CID  
+account           bafk2bzacecia5zacqt4gvd4z7275lnkhgraq75shy63cphakphhw6crf4joii
+cron              bafk2bzacecbyx7utt3tkvhqnfk64kgtlt5jlvv56o2liwczikgzfowk2cvqvk
+datacap           bafk2bzacecrypcpyzidphfl3sf3vhrjbiwzu7w3hoole45wsk2bqpverw4tni
+eam               bafk2bzacebybq7keb45l6isqfaiwxy5oi5wlpknhggjheut7q6xwp7mbxxku4
+ethaccount        bafk2bzaceajdy72edg3t2zcb6qwv2wgdsysfwdtczcklxcp4hlwh7pkxekja4
+evm               bafk2bzaceandffodu45eyro7jr7bizxw7ibipaiskt36xbp4vpvsxtrpkyjfm
+init              bafk2bzaceb5mjmy56ediswt2hvwqdfs2xzi4qw3cefkufoat57yyt3iwkg7kw
+multisig          bafk2bzaced3csl3buj7chpunsubrhwhchtskx674fpukfen4u6pbpkcheueya
+paymentchannel    bafk2bzacea3dpsfxw7cnj6zljmjnnaubp43a5kvuausigztmukektesg2flei
+placeholder       bafk2bzacedfvut2myeleyq67fljcrw4kkmn5pb5dpyozovj7jpoez5irnc3ro
+reward            bafk2bzaceapkgue3gcxmwx7bvypn33okppa2nwpelcfp7oyo5yln3brixpjpm
+storagemarket     bafk2bzaceaqrnikbxymygwhwa2rsvhnqj5kfch75pn5xawnx243brqlfglsl6
+storageminer      bafk2bzacecnl2hqe3nozwo7al7kdznqgdrv2hbbbmpcbcwzh3yl4trog433hc
+storagepower      bafk2bzacecb3tvvppxmktll3xehjc7mqbfilt6bd4gragbdwxn77hm5frkuac
+system            bafk2bzacecvcqje6kcfqeayj66hezlwzfznytwqkxgw7p64xac5f5lcwjpbwe
+verifiedregistry  bafk2bzacecudaqwbz6dukmdbfok7xuxcpjqighnizhxun4spdqvnqgftkupp2
+```
+
+## 🚚 Migration
+
+All node operators, including storage providers, should be aware that ONE pre-migration is being scheduled 120 epochs before the network upgrade. The migration for the NV24 upgrade is expected to be light with no heavy pre-migrations:
+
+- Pre-Migration is expected to take less then 1 minute.
+- The migration on the upgrade epoch is expected to take less than 30 seconds on a node with a NVMe-drive and a newer CPU. For nodes running on slower disks/CPU, it is still expected to take less then 1 minute.
+- RAM usages is expected to be under 20GiB RAM for both the pre-migration and migration.
+
+We recommend node operators (who haven't enabled splitstore discard mode) that do not care about historical chain states, to prune the chain blockstore by syncing from a snapshot 1-2 days before the upgrade.
+
+For certain node operators, such as full archival nodes or systems that need to keep large amounts of state (RPC providers), we recommend skipping the pre-migration and run the non-cached migration (i.e., just running the migration at the network upgrade epoch), and schedule for some additional downtime. Operators of such nodes can read the [How to disable premigration in network upgrade tutorial](https://lotus.filecoin.io/kb/disable-premigration/).
+
+## 📝 Changelog
+
+For the set of changes since the last stable release:
+
+* Node: https://github.com/filecoin-project/lotus/compare/v1.29.2...v1.30.0
+* Miner: https://github.com/filecoin-project/lotus/compare/v1.28.3...miner/v1.30.0
+
+## 👨‍👩‍👧‍👦 Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| Krishang | 2 | +34106/-0 | 109 |
+| Rod Vagg | 86 | +10643/-8291 | 456 |
+| Masih H. Derkani | 59 | +7700/-4725 | 298 |
+| Steven Allen | 55 | +6113/-3169 | 272 |
+| kamuik16 | 7 | +4618/-1333 | 285 |
+| Jakub Sztandera | 10 | +3995/-1226 | 94 |
+| Peter Rabbitson | 26 | +2313/-2718 | 275 |
+| Viraj Bhartiya | 5 | +2624/-580 | 50 |
+| Phi | 7 | +1337/-1519 | 257 |
+| Mikers | 1 | +1274/-455 | 23 |
+| Phi-rjan | 29 | +736/-600 | 92 |
+| Andrew Jackson (Ajax) | 3 | +732/-504 | 75 |
+| LexLuthr | 3 | +167/-996 | 8 |
+| Aarsh Shah | 12 | +909/-177 | 47 |
+| web3-bot | 40 | +445/-550 | 68 |
+| Piotr Galar | 6 | +622/-372 | 15 |
+| aarshkshah1992 | 18 | +544/-299 | 40 |
+| Steve Loeppky | 14 | +401/-196 | 22 |
+| Frrist | 1 | +403/-22 | 5 |
+| Łukasz Magiera | 4 | +266/-27 | 13 |
+| winniehere | 1 | +146/-144 | 3 |
+| Jon | 1 | +209/-41 | 4 |
+| Aryan Tikarya | 2 | +183/-8 | 7 |
+| adlrocha | 2 | +123/-38 | 21 |
+| dependabot[bot] | 11 | +87/-61 | 22 |
+| Jiaying Wang | 8 | +61/-70 | 12 |
+| Ian Davis | 2 | +60/-38 | 5 |
+| Aayush Rajasekaran | 2 | +81/-3 | 3 |
+| hanabi1224 | 4 | +46/-4 | 5 |
+| Laurent Senta | 1 | +44/-1 | 2 |
+| jennijuju | 6 | +21/-20 | 17 |
+| parthshah1 | 1 | +23/-13 | 1 |
+| Brendan O'Brien | 1 | +25/-10 | 2 |
+| Jennifer Wang | 4 | +24/-8 | 6 |
+| Matthew Rothenberg | 3 | +10/-18 | 6 |
+| riskrose | 1 | +8/-8 | 7 |
+| linghuying | 1 | +5/-5 | 5 |
+| fsgerse | 2 | +3/-7 | 3 |
+| PolyMa | 1 | +5/-5 | 5 |
+| zhangguanzhang | 1 | +3/-3 | 2 |
+| luozexuan | 1 | +3/-3 | 3 |
+| Po-Chun Chang | 1 | +6/-0 | 2 |
+| Kevin Martin | 1 | +4/-1 | 2 |
+| simlecode | 1 | +2/-2 | 2 |
+| ZenGround0 | 1 | +2/-2 | 2 |
+| GFZRZK | 1 | +2/-1 | 1 |
+| DemoYeti | 1 | +2/-1 | 1 |
+| qwdsds | 1 | +1/-1 | 1 |
+| Samuel Arogbonlo | 1 | +2/-0 | 2 |
+| Elias Rad | 1 | +1/-1 | 1 |
+
 # Node v1.29.2 / 2024-10-03
 
 This is the stable release for Lotus node v1.29.2. Key updates in this release include:
@@ -9,11 +132,8 @@ This is the stable release for Lotus node v1.29.2. Key updates in this release i
 - **Bug Fix:** Legacy/historical Drand lookups via `StateGetBeaconEntry` now work again for all historical epochs. `StateGetBeaconEntry` now uses the on-chain beacon entries and follows the same rules for historical Drand round matching as `StateGetRandomnessFromBeacon` and the `get_beacon_randomness` FVM syscall. Be aware that there will be some some variance in matching Filecoin epochs to Drand rounds where null Filecoin rounds are involved prior to network version 14. ([filecoin-project/lotus#12428](https://github.com/filecoin-project/lotus/pull/12428)).
 
 ## ☢️ Upgrade Warnings ☢️
-- This release requires a minimum Go version of v1.22.7 or higher ([filecoin-project/lotus#12459](https://github.com/filecoin-project/lotus/pull/12459))
 
-## 📝 Changelog
-
-See https://github.com/filecoin-project/lotus/compare/v1.29.1...release/v1.29.2 for the set of changes since the last release.
+- Minimum go-version been updated to v1.22.7 ([filecoin-project/lotus#12459](https://github.com/filecoin-project/lotus/pull/12459))
 
 ## 👨‍👩‍👧‍👦 Contributors
 
@@ -34,8 +154,18 @@ This is a Lotus Node patch release that addresses a critical sync issue affectin
 We strongly recommend that all users currently running Lotus v1.29.0 upgrade to this version to resolve the syncing problems.
 
 ## Bug Fixes
-
 - Update BLS dependency to fix [filecoin-project/lotus#12467](https://github.com/filecoin-project/lotus/pull/12467).
+
+# 1.28.3 / 2024-09-16
+
+This is a Lotus Node patch release that addresses a critical sync issue affecting users of the v1.28.2 release. The primary fix in this patch release is downgrading of a dependency that was causing invalid BLS signatures, leading to sync failures for many Lotus nodes. See #12467 for more information about the issue/bug.
+
+## Bug Fixes
+- Update BLS dependency to fix [filecoin-project/lotus#12467](https://github.com/filecoin-project/lotus/pull/12467).
+
+# UNRELEASED v1.29.2
+
+See https://github.com/filecoin-project/lotus/blob/release/v1.29.2/CHANGELOG.md
 
 # Node v1.29.0 / 2024-09-02
 
@@ -107,9 +237,11 @@ From https://github.com/filecoin-project/lotus/compare/v1.28.2...release/v1.29.0
 - github.com/filecoin-project/jackc/pgx (v5.4.1 -> v5.6.0)
 - feat(f3): update from v0.0.7 to v0.1.0 (#12382) ([filecoin-project/lotus#12382](https://github.com/filecoin-project/lotus/pull/12382))
 - feat: f3: update go-f3 to 0.2.0 (#12390) ([filecoin-project/lotus#12390](https://github.com/filecoin-project/lotus/pull/12390))
+- feat: update cheggaaa's pb to v3 ([filecoin-project/lotus#12518](https://github.com/filecoin-project/lotus/pull/12518))
 
 ### Chores
 
+- feat(eth): fix EthGetTransactionCount for pending block parameter ([filecoin-project/lotus#12520](https://github.com/filecoin-project/lotus/pull/11581))
 - chore: ffi: copy verifier iface, mock & ffi out of storage (#11581) ([filecoin-project/lotus#11581](https://github.com/filecoin-project/lotus/pull/11581))
 - docs: update LOTUS_RELEASE_FLOW.MD document (#12322) ([filecoin-project/lotus#12322](https://github.com/filecoin-project/lotus/pull/12322))
 - docs: update references to releases branch (#12396) ([filecoin-project/lotus#12396](https://github.com/filecoin-project/lotus/pull/12396))
@@ -305,7 +437,7 @@ We are one step closer to reduce Filecoin's finality from 7.5 hours to a minute 
 
 F3 (Fast Finality) is experimental in this release. All the new F3 APIs  are unstable and subject to until nv24 release (assuming f3 will be fully activated in this upgrade).
 
-Exchanges and RPC providers are recommended to opt-out of F3 functionality for now. You can disable F3 by adding the `DISABLE_F3 = 1` environment variable, which will output a log saying that F3 has been disabled.
+Exchanges and RPC providers are recommended to opt-out of F3 functionality for now. You can disable F3 by adding the `LOTUS_DISABLE_F3 = 1` environment variable, which will output a log saying that F3 has been disabled.
 
 ## Dependencies
 

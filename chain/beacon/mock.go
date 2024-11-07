@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/blake2b-simd"
+	"golang.org/x/crypto/blake2b"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"

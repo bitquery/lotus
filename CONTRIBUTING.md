@@ -5,6 +5,7 @@ Lotus is a universally open project and welcomes contributions of all kinds: cod
 
 - [Before Contributing](#before-contributing)
 - [Implementing Changes](#implementing-changes)
+- [Working with builtin-actors](#working-with-builtin-actors)
 - [PR Title Conventions](#pr-title-conventions)
 - [CHANGELOG Management](#changelog-management)
 - [Markdown Conventions](#markdown-conventions)
@@ -13,10 +14,10 @@ Lotus is a universally open project and welcomes contributions of all kinds: cod
 
 ## Before Contributing
 
-1. If the proposal entails a protocol change, please first submit a [Filecoin Improvement Proposal](https://github.com/filecoin-project/FIPs).
-2. If the change is complex and requires prior discussion, [open an issue](github.com/filecoin-project/lotus/issues) or a [discussion](https://github.com/filecoin-project/lotus/discussions) to request feedback before you start working on a pull request. This is to avoid disappointment and sunk costs, in case the change is not actually needed or accepted.
-3. Please refrain from submitting PRs to adapt existing code to subjective preferences. The changeset should contain functional or technical improvements/enhancements, bug fixes, new features, or some other clear material contribution. Simple stylistic changes are likely to be rejected in order to reduce code churn.
-4. Familiarize yourself with our [release flow](LOTUS_RELEASE_FLOW.md) to understand how changes are incorporated into releases.
+1. Familiarize yourself with our [release flow](LOTUS_RELEASE_FLOW.md) to understand how changes are incorporated into releases.  This includes our branch strategy and where to target PRs.
+2. If the proposal entails a protocol change, please first submit a [Filecoin Improvement Proposal](https://github.com/filecoin-project/FIPs).
+3. If the change is complex and requires prior discussion, [open an issue](github.com/filecoin-project/lotus/issues) or a [discussion](https://github.com/filecoin-project/lotus/discussions) to request feedback before you start working on a pull request. This is to avoid disappointment and sunk costs, in case the change is not actually needed or accepted.
+4. Please refrain from submitting PRs to adapt existing code to subjective preferences. The changeset should contain functional or technical improvements/enhancements, bug fixes, new features, or some other clear material contribution. Simple stylistic changes are likely to be rejected in order to reduce code churn.
 
 ## Implementing Changes
 
@@ -29,6 +30,10 @@ When implementing a change:
 5. Lint your code with [`golangci-lint`](https://golangci-lint.run) (CI will reject your PR if unlinted).
 6. Add tests.
 7. Write clean, thoughtful, and detailed [commit messages](https://chris.beams.io/posts/git-commit/). This is even more important than the PR description, because commit messages are stored _inside_ the Git history. One good rule is: if you are happy posting the commit message as the PR description, then it's a good commit message.
+
+## Working with builtin-actors
+
+For doing FIP development that involves a change in [builtin-actors](https://github.com/filecoin-project/builtin-actors) which needs to also be exposed in Lotus, see the [builtin-actor Development Guide](documentation/misc/Builtin-actors_Development.md).
 
 ## PR Title Conventions
 

@@ -14,6 +14,8 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/network"
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
+
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
 )
 
 var DrandSchedule = map[abi.ChainEpoch]DrandEnum{
@@ -30,7 +32,7 @@ const ActorDebugging = false
 const GenesisNetworkVersion = network.Version0
 
 const BootstrappersFile = "mainnet.pi"
-const GenesisFile = "mainnet.car"
+const GenesisFile = "mainnet.car.zst"
 
 const UpgradeBreezeHeight abi.ChainEpoch = 41280
 
@@ -105,7 +107,15 @@ const UpgradeDragonHeight abi.ChainEpoch = 3855360
 const UpgradePhoenixHeight abi.ChainEpoch = UpgradeDragonHeight + 120
 
 // 2024-08-06T12:00:00Z
-var UpgradeWaffleHeight abi.ChainEpoch = 4154640
+const UpgradeWaffleHeight abi.ChainEpoch = 4154640
+
+// 2024-11-20T23:00:00Z
+var UpgradeTuktukHeight = abi.ChainEpoch(4461240)
+
+// FIP-0081: for the power actor state for pledge calculations.
+// UpgradeTuktukPowerRampDurationEpochs ends up in the power actor state after
+// Tuktuk migration. along with a RampStartEpoch matching the upgrade height.
+var UpgradeTuktukPowerRampDurationEpochs = uint64(builtin.EpochsInYear)
 
 // This fix upgrade only ran on calibrationnet
 const UpgradeWatermelonFixHeight abi.ChainEpoch = -1
@@ -127,12 +137,16 @@ var PropagationDelaySecs = uint64(10)
 var EquivocationDelaySecs = uint64(2)
 
 func init() {
+	var addrNetwork address.Network
 	if os.Getenv("LOTUS_USE_TEST_ADDRESSES") != "1" {
-		SetAddressNetwork(address.Mainnet)
+		addrNetwork = address.Mainnet
+	} else {
+		addrNetwork = address.Testnet
 	}
+	SetAddressNetwork(addrNetwork)
 
-	if os.Getenv("LOTUS_DISABLE_WAFFLE") == "1" {
-		UpgradeWaffleHeight = math.MaxInt64 - 1
+	if os.Getenv("LOTUS_DISABLE_TUKTUK") == "1" {
+		UpgradeTuktukHeight = math.MaxInt64 - 1
 	}
 
 	// NOTE: DO NOT change this unless you REALLY know what you're doing. This is not consensus critical, however,
@@ -167,6 +181,11 @@ const Eip155ChainId = 314
 // WhitelistedBlock skips checks on message validity in this block to sidestep the zero-bls signature
 var WhitelistedBlock = cid.MustParse("bafy2bzaceapyg2uyzk7vueh3xccxkuwbz3nxewjyguoxvhx77malc2lzn2ybi")
 
+// The F3 manifest server ID, if any.
+var F3ManifestServerID = MustParseID("12D3KooWENMwUF9YxvQxar7uBWJtZkA6amvK4xWmKXfSiHUo2Qq7")
+
+// The initial F3 power table CID.
+var F3InitialPowerTableCID = cid.Undef
+
 const F3Enabled = true
-const ManifestServerID = "12D3KooWENMwUF9YxvQxar7uBWJtZkA6amvK4xWmKXfSiHUo2Qq7"
 const F3BootstrapEpoch abi.ChainEpoch = -1

@@ -11,7 +11,9 @@ import (
 	"math/big"
 
 	"github.com/ipfs/go-cid"
+	"github.com/libp2p/go-libp2p/core/peer"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/network"
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
@@ -104,6 +106,9 @@ var (
 	UpgradePhoenixHeight              abi.ChainEpoch = -27
 	UpgradeCalibrationDragonFixHeight abi.ChainEpoch = -28
 	UpgradeWaffleHeight               abi.ChainEpoch = -29
+	UpgradeTuktukHeight               abi.ChainEpoch = -30
+
+	UpgradeTuktukPowerRampDurationEpochs uint64 = 0
 
 	DrandSchedule = map[abi.ChainEpoch]DrandEnum{
 		0:                    DrandMainnet,
@@ -119,15 +124,17 @@ var (
 
 	ZeroAddress = MustParseAddress("f3yaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaby2smx7a")
 
-	WhitelistedBlock                 = cid.Undef
-	BootstrappersFile                = ""
-	GenesisFile                      = ""
-	F3Enabled                        = false
-	ManifestServerID                 = ""
-	F3BootstrapEpoch  abi.ChainEpoch = -1
+	WhitelistedBlock                      = cid.Undef
+	BootstrappersFile                     = ""
+	GenesisFile                           = ""
+	F3Enabled                             = false
+	F3ManifestServerID     peer.ID        = ""
+	F3BootstrapEpoch       abi.ChainEpoch = -1
+	F3InitialPowerTableCID                = cid.Undef
 )
 
 func init() {
+	SetAddressNetwork(address.Testnet)
 	Devnet = true
 }
 

@@ -22,6 +22,7 @@
   - [Why do we call it "Lotus Node"?](#why-do-we-call-it-lotus-node)
   - [Why isn't Lotus Miner released more frequently?](#why-isnt-lotus-miner-released-more-frequently)
   - [Why is the `releases` branch deprecated and what are alternatives?](#why-is-the-releases-branch-deprecated-and-what-are-alternatives)
+  - [Why does Lotus still use a `master` branch instead of `main`?](#why-does-lotus-still-use-a-master-branch-instead-of-main)
 - [Related Items](#related-items)
 
 ## Purpose
@@ -38,7 +39,7 @@ This document aims to describe how the Lotus maintainers ship releases of Lotus.
 
 - Lotus software use semantic versioning (`MAJOR`.`MINOR`.`PATCH`).
 - **`MAJOR` releases** are reserved for significant architectural changes to Lotus. 
-- **`MINOR` releases** are shipped for network upgrades, API breaking changes, or non-backwards-compatible feature enhancements.
+- **`MINOR` releases** are shipped for [network upgrades](./documentation/misc/Building_a_network_skeleton.md#context), API breaking changes, or non-backwards-compatible feature enhancements.
 - **`PATCH` releases** contain backwards-compatible bug fixes or feature enhancements.
 - Releases are almost always branched from the `master` branch, even if they include a network upgrade. The main exception is if there is a critical security patch we need to rush out. In that case, we would patch an existing release to increase release speed and reduce barrier to adoption.
 - We aim to ship a new release of the Lotus Node software approximately every 4 weeks, except during network upgrade periods which may have longer release cycles.
@@ -71,7 +72,8 @@ Bumps to the Lotus software minor version number (e.g., 1.28.0, 1.29.0) are used
 - API breaking changes
 - Non-backwards-compatible feature enhancements
 
-Users MUST upgrade to minor releases that include a network upgrade before a certain time to keep in sync with the Filecoin network. We recommend everyone to subscribe to status.filecoin.io for updates when these are happening, as well checking the release notes of a minor version. 
+Users MUST upgrade to minor releases that include a network upgrade before a certain time to keep in sync with the Filecoin network. We recommend everyone subscribe to status.filecoin.io for updates when these are happening, as well as checking the release notes of a minor version. ([Learn more about how network upgrades relate to Lotus and its key dependencies.](./documentation/misc/Building_a_network_skeleton.md#context))
+
 Users can decide whether to upgrade to minor version releases that don't include a network upgrade. They are still encouraged to upgrade so they get the latest functionality and improvements and deploy a smaller delta of new code when there is a subsequent minor release they must adopt as part of a network upgrade later. 
 
 ### Patch Releases
@@ -107,24 +109,19 @@ Unless a security issue is actively being exploited or a significant number of u
 
 ## Branch and Tag Strategy
 
-> [!NOTE]
-> - <span style="color:blue">Blue text</span> indicates node-related information.
-> - <span style="color:orange">Orange text</span> indicates miner-related information.
-> - System default colored text applies to both node and miner releases.
-
-* Releases are branched from the `master` branch, regardless of whether they include a network upgrade or not.
+* Releases are usually branched from the `master` branch, regardless of whether they include a network upgrade or not.
+  * For certain patch releases where we can't risk including recent `master` changes (such as for security or emergency bug-fix releases):
+    * Node: `release/vX.Y.Z+1` will be created from `release/vX.Y.Z`
+    * Miner: `release/miner/vX.Y.Z+1` will be created from `release/miner/vX.Y.Z`
 * PRs usually target the `master` branch, even if they need to be backported to a release branch. 
+  * The primary exception is CHANGELOG editorializing and callouts.  As part of the [release process](https://github.com/filecoin-project/lotus/blob/master/documentation/misc/RELEASE_ISSUE_TEMPLATE.md), those changes happen directly in a release branch and are cherry-picked back to `master` at the end of a release. 
 * PRs that need to be backported should be marked with a `backport` label.
-* <span style="color:blue">Node release branches are named `release/vX.Y.Z`</span>
-* <span style="color:orange">Miner release branches are named `release/miner/vX.Y.Z`</span>
+* Node release branches are named `release/vX.Y.Z`
+* Miner release branches are named `release/miner/vX.Y.Z`
 * By the end of the release process:
-  * <span style="color:blue">A `release/vX.Y.Z` branch (node) will have an associated `vX.Y.Z` tag</span>
-  * <span style="color:orange">A `release/miner/vX.Y.Z` branch (miner) will have an associated `miner/vX.Y.Z` tag</span>
-* Both node and miner releases may have additional `vX.Y.Z-rcN` or `miner/vX.Y.Z-rcN` tags for release candidates
-* The `master` branch is typically the source for creating release branches
-* For emergency patch releases where we can't risk including recent `master` changes:
-  * <span style="color:blue">Node: `release/vX.Y.Z+1` will be created from `release/vX.Y.Z`</span>
-  * <span style="color:orange">Miner: `release/miner/vX.Y.Z+1` will be created from `release/miner/vX.Y.Z`</span>
+  * A `release/vX.Y.Z` branch (node) will have an associated `vX.Y.Z` tag
+  * A `release/miner/vX.Y.Z` branch (miner) will have an associated `miner/vX.Y.Z` tag
+* Both node and miner releases may have additional `vX.Y.Z-rcN` or `miner/vX.Y.Z-rcN` tags for release candidates.
 * As of 202408, the `releases` branch is no longer used and no longer tracks the latest release.  See [Why is the `releases` branch deprecated and what are alternatives?](#why-is-the-releases-branch-deprecated-and-what-are-alternatives).
 
 ## FAQ
@@ -155,8 +152,11 @@ Given Lotus Miner is being actively replaced by [Curio](https://github.com/filec
 `releases` goal was to point to the latest stable tagged release of Lotus software for convenience and script.  This worked when Lotus Node and Miner were released together, but with the [2024Q3 split of releasing Lotus Node and Miner separately](https://github.com/filecoin-project/lotus/issues/12010), there isn't necessarily a single commit to track for the latest released software of both. Rather than having ambiguity by tracking Lotus Node or Lotus Miner releases, we [decided it was clearer to deprecate the branch](https://github.com/filecoin-project/lotus/issues/12374). 
 
 That said, one can still programmatically get the latest release based on the [Branch and Tag Strategy](#branch-and-tag-strategy) with:
-* Lotus Node: `git tag -l 'v*' | sort -V -r | head -n 1` 
-* Lotus Miner: `git tag -l 'miner/v*' | sort -V -r | head -n 1` 
+* Lotus Node: `git tag -l 'v*' | grep -v "-" | sort -V -r | head -n 1` 
+* Lotus Miner: `git tag -l 'miner/v*' | grep -v "-" | sort -V -r | head -n 1` 
+
+### Why does Lotus still use a `master` branch instead of `main`?
+There was a [push in 202109](https://github.com/filecoin-project/lotus/issues/7356) on changing the default branch to `main` from `master` for good reason. 3 years later though, the migration was never completed and `master` has ossified 😔.  The effort's failure was acknowledged and commented on in the issue above in 202409.  
 
 ## Related Items
 

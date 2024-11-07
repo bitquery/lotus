@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -29,6 +30,7 @@ import (
 	system12 "github.com/filecoin-project/go-state-types/builtin/v12/system"
 	nv22 "github.com/filecoin-project/go-state-types/builtin/v13/migration"
 	nv23 "github.com/filecoin-project/go-state-types/builtin/v14/migration"
+	nv24 "github.com/filecoin-project/go-state-types/builtin/v15/migration"
 	nv17 "github.com/filecoin-project/go-state-types/builtin/v9/migration"
 	"github.com/filecoin-project/go-state-types/manifest"
 	"github.com/filecoin-project/go-state-types/migration"
@@ -316,6 +318,17 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 			StopWithin:      10,
 		}},
 		Expensive: true,
+	}, {
+		Height:    buildconstants.UpgradeTuktukHeight,
+		Network:   network.Version24,
+		Migration: UpgradeActorsV15,
+		PreMigrations: []stmgr.PreMigration{{
+			PreMigration:    PreUpgradeActorsV15,
+			StartWithin:     120,
+			DontStartWithin: 15,
+			StopWithin:      10,
+		}},
+		Expensive: true,
 	},
 	}
 
@@ -455,7 +468,7 @@ func UpgradeFaucetBurnRecovery(ctx context.Context, sm *stmgr.StateManager, _ st
 	err = tree.ForEach(func(addr address.Address, act *types.Actor) error {
 		lbact, err := lbtree.GetActor(addr)
 		if err != nil {
-			if !xerrors.Is(err, types.ErrActorNotFound) {
+			if !errors.Is(err, types.ErrActorNotFound) {
 				return xerrors.Errorf("failed to get actor in lookback state")
 			}
 		}
@@ -1020,7 +1033,7 @@ func UpgradeActorsV3(ctx context.Context, sm *stmgr.StateManager, cache stmgr.Mi
 
 	if buildconstants.BuildType == buildconstants.BuildMainnet {
 		err := stmgr.TerminateActor(ctx, tree, buildconstants.ZeroAddress, cb, epoch, ts)
-		if err != nil && !xerrors.Is(err, types.ErrActorNotFound) {
+		if err != nil && !errors.Is(err, types.ErrActorNotFound) {
 			return cid.Undef, xerrors.Errorf("deleting zero bls actor: %w", err)
 		}
 
@@ -2563,6 +2576,134 @@ func upgradeActorsV14Common(
 		migrationLogger{}, cache)
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("upgrading to actors v14: %w", err)
+	}
+
+	// Persist the result.
+	newRoot, err := adtStore.Put(ctx, &types.StateRoot{
+		Version: types.StateTreeVersion5,
+		Actors:  newHamtRoot,
+		Info:    stateRoot.Info,
+	})
+	if err != nil {
+		return cid.Undef, xerrors.Errorf("failed to persist new state root: %w", err)
+	}
+
+	// Persists the new tree and shuts down the flush worker
+	if err := writeStore.Flush(ctx); err != nil {
+		return cid.Undef, xerrors.Errorf("writeStore flush failed: %w", err)
+	}
+
+	if err := writeStore.Shutdown(ctx); err != nil {
+		return cid.Undef, xerrors.Errorf("writeStore shutdown failed: %w", err)
+	}
+
+	return newRoot, nil
+}
+
+// PreUpgradeActorsV15 runs the premigration for v15 actors. Note that this migration contains no
+// cached migrators, so the only purpose of running a premigration is to prime the blockstore with
+// IPLD blocks that would be created during the migration, to reduce the amount of work that needs
+// to be done during the actual migration since block Puts become simple Has operations. But the
+// same amount of migration work will need to be done otherwise.
+func PreUpgradeActorsV15(ctx context.Context, sm *stmgr.StateManager, cache stmgr.MigrationCache, root cid.Cid, epoch abi.ChainEpoch, ts *types.TipSet) error {
+	// Use half the CPUs for pre-migration, but leave at least 3.
+	workerCount := MigrationMaxWorkerCount
+	if workerCount <= 4 {
+		workerCount = 1
+	} else {
+		workerCount /= 2
+	}
+
+	_, lbRoot, err := stmgr.GetLookbackTipSetForRound(ctx, sm, ts, epoch)
+	if err != nil {
+		return xerrors.Errorf("error getting lookback ts for premigration: %w", err)
+	}
+
+	config := migration.Config{
+		MaxWorkers:        uint(workerCount),
+		ProgressLogPeriod: time.Minute * 5,
+	}
+
+	_, err = upgradeActorsV15Common(ctx, sm, cache, lbRoot, epoch, config)
+	return err
+}
+
+func UpgradeActorsV15(
+	ctx context.Context,
+	sm *stmgr.StateManager,
+	cache stmgr.MigrationCache,
+	cb stmgr.ExecMonitor,
+	root cid.Cid,
+	epoch abi.ChainEpoch,
+	ts *types.TipSet,
+) (cid.Cid, error) {
+	// Use all the CPUs except 2.
+	workerCount := MigrationMaxWorkerCount - 3
+	if workerCount <= 0 {
+		workerCount = 1
+	}
+	config := migration.Config{
+		MaxWorkers:        uint(workerCount),
+		JobQueueSize:      1000,
+		ResultQueueSize:   100,
+		ProgressLogPeriod: 10 * time.Second,
+	}
+	newRoot, err := upgradeActorsV15Common(ctx, sm, cache, root, epoch, config)
+	if err != nil {
+		return cid.Undef, xerrors.Errorf("migrating actors vXX state: %w", err)
+	}
+	return newRoot, nil
+}
+
+func upgradeActorsV15Common(
+	ctx context.Context,
+	sm *stmgr.StateManager,
+	cache stmgr.MigrationCache,
+	root cid.Cid,
+	epoch abi.ChainEpoch,
+	config migration.Config,
+) (cid.Cid, error) {
+	writeStore := blockstore.NewAutobatch(ctx, sm.ChainStore().StateBlockstore(), units.GiB/4)
+	adtStore := store.ActorStore(ctx, writeStore)
+	// ensure that the manifest is loaded in the blockstore
+	if err := bundle.LoadBundles(ctx, writeStore, actorstypes.Version15); err != nil {
+		return cid.Undef, xerrors.Errorf("failed to load manifest bundle: %w", err)
+	}
+
+	// Load the state root.
+	var stateRoot types.StateRoot
+	if err := adtStore.Get(ctx, root, &stateRoot); err != nil {
+		return cid.Undef, xerrors.Errorf("failed to decode state root: %w", err)
+	}
+
+	if stateRoot.Version != types.StateTreeVersion5 {
+		return cid.Undef, xerrors.Errorf(
+			"expected state root version 5 for actors vXX+1 upgrade, got %d",
+			stateRoot.Version,
+		)
+	}
+
+	manifest, ok := actors.GetManifest(actorstypes.Version15)
+	if !ok {
+		return cid.Undef, xerrors.Errorf("no manifest CID for vXX+1 upgrade")
+	}
+
+	// Perform the migration
+	newHamtRoot, err := nv24.MigrateStateTree(
+		ctx,
+		adtStore,
+		manifest,
+		stateRoot.Actors,
+		epoch,
+		// two FIP-0081 constants for this migration only
+		int64(buildconstants.UpgradeTuktukHeight),           // powerRampStartEpoch
+		buildconstants.UpgradeTuktukPowerRampDurationEpochs, // powerRampDurationEpochs
+		config,
+		migrationLogger{},
+		cache,
+	)
+	if err != nil {
+		return cid.Undef, xerrors.Errorf("upgrading to actors v15: %w", err)
 	}
 
 	// Persist the result.

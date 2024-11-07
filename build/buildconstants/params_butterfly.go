@@ -10,6 +10,8 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/network"
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
+
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
 )
 
 var DrandSchedule = map[abi.ChainEpoch]DrandEnum{
@@ -22,7 +24,7 @@ var NetworkBundle = "butterflynet"
 var ActorDebugging = false
 
 const BootstrappersFile = "butterflynet.pi"
-const GenesisFile = "butterflynet.car"
+const GenesisFile = "butterflynet.car.zst"
 
 const UpgradeBreezeHeight = -1
 const BreezeGasTampingDuration = 120
@@ -53,8 +55,15 @@ const UpgradeThunderHeight = -23
 const UpgradeWatermelonHeight = -24
 const UpgradeDragonHeight = -25
 const UpgradePhoenixHeight = -26
+const UpgradeWaffleHeight = -27
 
-const UpgradeWaffleHeight = 100
+// ??????
+const UpgradeTuktukHeight = 999999999999999
+
+// FIP-0081: for the power actor state for pledge calculations.
+// UpgradeTuktukPowerRampDurationEpochs ends up in the power actor state after
+// Tuktuk migration. along with a RampStartEpoch matching the upgrade height.
+var UpgradeTuktukPowerRampDurationEpochs = uint64(builtin.EpochsInYear)
 
 // This fix upgrade only ran on calibrationnet
 const UpgradeWatermelonFixHeight = -100
@@ -97,5 +106,10 @@ const Eip155ChainId = 3141592
 var WhitelistedBlock = cid.Undef
 
 const F3Enabled = true
-const ManifestServerID = "12D3KooWJr9jy4ngtJNR7JC1xgLFra3DjEtyxskRYWvBK9TC3Yn6"
+
+var F3ManifestServerID = MustParseID("12D3KooWJr9jy4ngtJNR7JC1xgLFra3DjEtyxskRYWvBK9TC3Yn6")
+
+// The initial F3 power table CID.
+var F3InitialPowerTableCID cid.Cid = cid.Undef
+
 const F3BootstrapEpoch abi.ChainEpoch = 1000
