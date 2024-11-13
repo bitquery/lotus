@@ -2,10 +2,17 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-jsonrpc"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/exitcode"
 )
+
+var invalidExecutionRevertedMsg = xerrors.New("invalid execution reverted error")
 
 const (
 	EOutOfGas = iota + jsonrpc.FirstUserCode
@@ -17,6 +24,8 @@ const (
 	EF3ParticipationTooManyInstances
 	EF3ParticipationTicketStartBeforeExisting
 	EF3NotReady
+	EExecutionReverted
+	ENullRound
 )
 
 var (
@@ -40,13 +49,17 @@ var (
 	// should back off and try again later.
 	ErrF3NotReady = &errF3NotReady{}
 
-	_ error = (*ErrOutOfGas)(nil)
-	_ error = (*ErrActorNotFound)(nil)
-	_ error = (*errF3Disabled)(nil)
-	_ error = (*errF3ParticipationTicketInvalid)(nil)
-	_ error = (*errF3ParticipationTicketExpired)(nil)
-	_ error = (*errF3ParticipationIssuerMismatch)(nil)
-	_ error = (*errF3NotReady)(nil)
+	_ error                 = (*ErrOutOfGas)(nil)
+	_ error                 = (*ErrActorNotFound)(nil)
+	_ error                 = (*errF3Disabled)(nil)
+	_ error                 = (*errF3ParticipationTicketInvalid)(nil)
+	_ error                 = (*errF3ParticipationTicketExpired)(nil)
+	_ error                 = (*errF3ParticipationIssuerMismatch)(nil)
+	_ error                 = (*errF3NotReady)(nil)
+	_ error                 = (*ErrExecutionReverted)(nil)
+	_ jsonrpc.RPCErrorCodec = (*ErrExecutionReverted)(nil)
+	_ error                 = (*ErrNullRound)(nil)
+	_ jsonrpc.RPCErrorCodec = (*ErrNullRound)(nil)
 )
 
 func init() {
@@ -59,6 +72,8 @@ func init() {
 	RPCErrors.Register(EF3ParticipationTooManyInstances, new(*errF3ParticipationTooManyInstances))
 	RPCErrors.Register(EF3ParticipationTicketStartBeforeExisting, new(*errF3ParticipationTicketStartBeforeExisting))
 	RPCErrors.Register(EF3NotReady, new(*errF3NotReady))
+	RPCErrors.Register(EExecutionReverted, new(*ErrExecutionReverted))
+	RPCErrors.Register(ENullRound, new(*ErrNullRound))
 }
 
 func ErrorIsIn(err error, errorTypes []error) bool {
@@ -110,3 +125,91 @@ func (errF3ParticipationTicketStartBeforeExisting) Error() string {
 type errF3NotReady struct{}
 
 func (errF3NotReady) Error() string { return "f3 isn't yet ready to participate" }
+
+// ErrExecutionReverted is used to return execution reverted with a reason for a revert in the `data` field.
+type ErrExecutionReverted struct {
+	Message string
+	Data    string
+}
+
+// Error returns the error message.
+func (e *ErrExecutionReverted) Error() string { return e.Message }
+
+// FromJSONRPCError converts a JSONRPCError to ErrExecutionReverted.
+func (e *ErrExecutionReverted) FromJSONRPCError(jerr jsonrpc.JSONRPCError) error {
+	if jerr.Code != EExecutionReverted || jerr.Message == "" || jerr.Data == nil {
+		return invalidExecutionRevertedMsg
+	}
+
+	data, ok := jerr.Data.(string)
+	if !ok {
+		return xerrors.Errorf("expected string data in execution reverted error, got %T", jerr.Data)
+	}
+
+	e.Message = jerr.Message
+	e.Data = data
+	return nil
+}
+
+// ToJSONRPCError converts ErrExecutionReverted to a JSONRPCError.
+func (e *ErrExecutionReverted) ToJSONRPCError() (jsonrpc.JSONRPCError, error) {
+	return jsonrpc.JSONRPCError{
+		Code:    EExecutionReverted,
+		Message: e.Message,
+		Data:    e.Data,
+	}, nil
+}
+
+// NewErrExecutionReverted creates a new ErrExecutionReverted with the given reason.
+func NewErrExecutionReverted(exitCode exitcode.ExitCode, error, reason string, data []byte) *ErrExecutionReverted {
+	return &ErrExecutionReverted{
+		Message: fmt.Sprintf("message execution failed (exit=[%s], revert reason=[%s], vm error=[%s])", exitCode, reason, error),
+		Data:    fmt.Sprintf("0x%x", data),
+	}
+}
+
+type ErrNullRound struct {
+	Epoch   abi.ChainEpoch
+	Message string
+}
+
+func NewErrNullRound(epoch abi.ChainEpoch) *ErrNullRound {
+	return &ErrNullRound{
+		Epoch:   epoch,
+		Message: fmt.Sprintf("requested epoch was a null round (%d)", epoch),
+	}
+}
+
+func (e *ErrNullRound) Error() string {
+	return e.Message
+}
+
+func (e *ErrNullRound) FromJSONRPCError(jerr jsonrpc.JSONRPCError) error {
+	if jerr.Code != ENullRound {
+		return fmt.Errorf("unexpected error code: %d", jerr.Code)
+	}
+
+	epoch, ok := jerr.Data.(float64)
+	if !ok {
+		return fmt.Errorf("expected number data in null round error, got %T", jerr.Data)
+	}
+
+	e.Epoch = abi.ChainEpoch(epoch)
+	e.Message = jerr.Message
+	return nil
+}
+
+func (e *ErrNullRound) ToJSONRPCError() (jsonrpc.JSONRPCError, error) {
+	return jsonrpc.JSONRPCError{
+		Code:    ENullRound,
+		Message: e.Message,
+		Data:    e.Epoch,
+	}, nil
+}
+
+// Is performs a non-strict type check, we only care if the target is an ErrNullRound
+// and will ignore the contents (specifically there is no matching on Epoch).
+func (e *ErrNullRound) Is(target error) bool {
+	_, ok := target.(*ErrNullRound)
+	return ok
+}

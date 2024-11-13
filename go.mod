@@ -12,8 +12,6 @@ replace github.com/filecoin-project/test-vectors => ./extern/test-vectors // pro
 
 replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi // provided via a git submodule
 
-replace github.com/kilic/bls12-381 v0.1.1-0.20220929213557-ca162e8a70f4 => github.com/kilic/bls12-381 v0.1.0 // to fix bls signature validation
-
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/BurntSushi/toml v1.3.2
@@ -49,7 +47,7 @@ require (
 	github.com/filecoin-project/go-f3 v0.7.2
 	github.com/filecoin-project/go-fil-commcid v0.2.0
 	github.com/filecoin-project/go-hamt-ipld/v3 v3.4.0
-	github.com/filecoin-project/go-jsonrpc v0.6.0
+	github.com/filecoin-project/go-jsonrpc v0.7.0
 	github.com/filecoin-project/go-padreader v0.0.1
 	github.com/filecoin-project/go-paramfetch v0.0.4
 	github.com/filecoin-project/go-state-types v0.15.0
@@ -135,7 +133,7 @@ require (
 	github.com/sirupsen/logrus v1.9.2
 	github.com/stretchr/testify v1.9.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
-	github.com/triplewz/poseidon v0.0.2-0.20240407130934-5265fab9d889
+	github.com/triplewz/poseidon v0.0.2
 	github.com/urfave/cli/v2 v2.25.5
 	github.com/whyrusleeping/bencher v0.0.0-20190829221104-bb6607aa8bba
 	github.com/whyrusleeping/cbor-gen v0.2.0
@@ -153,7 +151,6 @@ require (
 	go.opentelemetry.io/otel/metric v1.28.0
 	go.opentelemetry.io/otel/sdk v1.28.0
 	go.opentelemetry.io/otel/sdk/metric v1.28.0
-	go.uber.org/atomic v1.11.0
 	go.uber.org/fx v1.22.1
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.27.0
@@ -330,6 +327,7 @@ require (
 	gitlab.com/yawning/tuplehash v0.0.0-20230713102510-df83abbf9a02 // indirect
 	go.dedis.ch/kyber/v4 v4.0.0-pre2.0.20240924132404-4de33740016e // indirect
 	go.opentelemetry.io/otel/trace v1.28.0 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/dig v1.17.1 // indirect
 	go.uber.org/mock v0.4.0 // indirect
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect

@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/bits"
 	"os"
 	"sort"
 	"strconv"
@@ -524,6 +523,56 @@ func TestEthGetLogsBasic(t *testing.T) {
 	}
 
 	AssertEthLogs(t, rctLogs, expected, received)
+
+	head, err := client.ChainHead(ctx)
+	require.NoError(err)
+
+	for height := 0; height < int(head.Height()); height++ {
+		// for each tipset
+		ts, err := client.ChainGetTipSetByHeight(ctx, abi.ChainEpoch(height), types.EmptyTSK)
+		require.NoError(err)
+
+		if ts.Height() != abi.ChainEpoch(height) {
+			iv, err := client.ChainValidateIndex(ctx, abi.ChainEpoch(height), false)
+			require.NoError(err)
+			require.True(iv.IsNullRound)
+			t.Logf("tipset %d is a null round", height)
+			continue
+		}
+
+		expectedValidation := types.IndexValidation{
+			TipSetKey:                ts.Key(),
+			Height:                   ts.Height(),
+			IndexedMessagesCount:     0,
+			IndexedEventsCount:       0,
+			IndexedEventEntriesCount: 0,
+			Backfilled:               false,
+			IsNullRound:              false,
+		}
+		messages, err := client.ChainGetMessagesInTipset(ctx, ts.Key())
+		require.NoError(err)
+		expectedValidation.IndexedMessagesCount = uint64(len(messages))
+		for _, m := range messages {
+			receipt, err := client.StateSearchMsg(ctx, types.EmptyTSK, m.Cid, -1, false)
+			require.NoError(err)
+			require.NotNil(receipt)
+			// receipt
+			if receipt.Receipt.EventsRoot != nil {
+				events, err := client.ChainGetEvents(ctx, *receipt.Receipt.EventsRoot)
+				require.NoError(err)
+				expectedValidation.IndexedEventsCount += uint64(len(events))
+				for _, event := range events {
+					expectedValidation.IndexedEventEntriesCount += uint64(len(event.Entries))
+				}
+			}
+		}
+
+		t.Logf("tipset %d: %+v", height, expectedValidation)
+
+		iv, err := client.ChainValidateIndex(ctx, abi.ChainEpoch(height), false)
+		require.NoError(err)
+		require.Equal(iv, &expectedValidation)
+	}
 }
 
 func TestEthSubscribeLogsNoTopicSpec(t *testing.T) {
@@ -615,26 +664,13 @@ func TestTxReceiptBloom(t *testing.T) {
 
 	// computed by calling EventMatrix/logEventZeroData in remix
 	// note this only contains topic bits
-	matchMask := "0x00000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-
-	maskBytes, err := hex.DecodeString(matchMask[2:])
+	expectedBloom, err := hex.DecodeString("00000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
 	require.NoError(t, err)
 
-	bitsSet := 0
-	for i, maskByte := range maskBytes {
-		bitsSet += bits.OnesCount8(receipt.LogsBloom[i])
+	// We need to add the address bits before comparing.
+	ethtypes.EthBloomSet(expectedBloom, receipt.To[:])
 
-		if maskByte > 0 {
-			require.True(t, maskByte&receipt.LogsBloom[i] > 0)
-		}
-	}
-
-	// Deflake plan: (Flake: 5 bits instead of 6)
-	//   Debug + search logs for "LogsBloom"
-	//   compare to passing case.
-	//
-	// 3 bits from the topic, 3 bits from the address
-	require.Equal(t, 6, bitsSet)
+	require.Equal(t, expectedBloom, []uint8(receipt.LogsBloom))
 }
 
 func TestMultipleEvents(t *testing.T) {
