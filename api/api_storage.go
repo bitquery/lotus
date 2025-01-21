@@ -45,7 +45,7 @@ type StorageMiner interface {
 	ActorSectorSize(context.Context, address.Address) (abi.SectorSize, error) //perm:read
 	ActorAddressConfig(ctx context.Context) (AddressConfig, error)            //perm:read
 
-	// WithdrawBalance allows to withdraw balance from miner actor to owner address
+	// ActorWithdrawBalance allows to withdraw balance from miner actor to owner address
 	// Specify amount as "0" to withdraw full balance. This method returns a message CID
 	// and does not wait for message execution
 	ActorWithdrawBalance(ctx context.Context, amount abi.TokenAmount) (cid.Cid, error) //perm:admin
@@ -172,7 +172,7 @@ type StorageMiner interface {
 	// SealingSchedDiag dumps internal sealing scheduler state
 	SealingSchedDiag(ctx context.Context, doSched bool) (interface{}, error) //perm:admin
 	SealingAbort(ctx context.Context, call storiface.CallID) error           //perm:admin
-	// SealingSchedRemove removes a request from sealing pipeline
+	// SealingRemoveRequest removes a request from sealing pipeline
 	SealingRemoveRequest(ctx context.Context, schedId uuid.UUID) error //perm:admin
 
 	// paths.SectorIndex
@@ -186,7 +186,7 @@ type StorageMiner interface {
 	//
 	// If allowFetch is set, list of paths to which the sector can be fetched will also be returned.
 	// - Paths which have sector files locally (don't require fetching) will be listed first.
-	// - Paths which have sector files locally will not be filtered based on based on AllowTypes/DenyTypes.
+	// - Paths which have sector files locally will not be filtered based on AllowTypes/DenyTypes.
 	// - Paths which require fetching will be filtered based on AllowTypes/DenyTypes. If multiple
 	//   file types are specified, each type will be considered individually, and a union of all paths
 	//   which can accommodate each file type will be returned.

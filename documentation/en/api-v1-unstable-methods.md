@@ -239,6 +239,7 @@
   * [StateMarketBalance](#StateMarketBalance)
   * [StateMarketDeals](#StateMarketDeals)
   * [StateMarketParticipants](#StateMarketParticipants)
+  * [StateMarketProposalPending](#StateMarketProposalPending)
   * [StateMarketStorageDeal](#StateMarketStorageDeal)
   * [StateMinerActiveSectors](#StateMinerActiveSectors)
   * [StateMinerAllocated](#StateMinerAllocated)
@@ -1325,11 +1326,36 @@ Response: `{}`
 ## Eth
 These methods are used for Ethereum-compatible JSON-RPC calls
 
-EthAccounts will always return [] since we don't expect Lotus to manage private keys
+### Execution model reconciliation
+
+Ethereum relies on an immediate block-based execution model. The block that includes
+a transaction is also the block that executes it. Each block specifies the state root
+resulting from executing all transactions within it (output state).
+
+In Filecoin, at every epoch there is an unknown number of round winners all of whom are
+entitled to publish a block. Blocks are collected into a tipset. A tipset is committed
+only when the subsequent tipset is built on it (i.e. it becomes a parent). Block producers
+execute the parent tipset and specify the resulting state root in the block being produced.
+In other words, contrary to Ethereum, each block specifies the input state root.
+
+Ethereum clients expect transactions returned via eth_getBlock* to have a receipt
+(due to immediate execution). For this reason:
+
+  - eth_blockNumber returns the latest executed epoch (head - 1)
+  - The 'latest' block refers to the latest executed epoch (head - 1)
+  - The 'pending' block refers to the current speculative tipset (head)
+  - eth_getTransactionByHash returns the inclusion tipset of a message, but
+    only after it has executed.
+  - eth_getTransactionReceipt ditto.
+
+"Latest executed epoch" refers to the tipset that this node currently
+accepts as the best parent tipset, based on the blocks it is accumulating
+within the HEAD tipset.
 
 
 ### EthAccounts
-There are not yet any comments for this method.
+EthAccounts will always return [] since we don't expect Lotus to manage private keys
+
 
 Perms: read
 
@@ -2416,49 +2442,45 @@ Response:
 ```json
 {
   "GPBFTInstance": 0,
-  "ECChain": null,
+  "ECChain": [
+    {
+      "Key": [
+        {
+          "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+        },
+        {
+          "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+        }
+      ],
+      "Commitments": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "Epoch": 0,
+      "PowerTable": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      }
+    }
+  ],
   "SupplementalData": {
-    "Commitments": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0
-    ],
-    "PowerTable": null
+    "Commitments": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "PowerTable": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    }
   },
   "Signers": [
-    0
+    2,
+    2,
+    1,
+    1,
+    1,
+    1
   ],
-  "Signature": null,
-  "PowerTableDelta": null
+  "Signature": "VW5EYWRhU2VB",
+  "PowerTableDelta": [
+    {
+      "ParticipantID": 0,
+      "PowerDelta": "0",
+      "SigningKey": "QmFScmVsRVll"
+    }
+  ]
 }
 ```
 
@@ -2536,49 +2558,45 @@ Response:
 ```json
 {
   "GPBFTInstance": 0,
-  "ECChain": null,
+  "ECChain": [
+    {
+      "Key": [
+        {
+          "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+        },
+        {
+          "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+        }
+      ],
+      "Commitments": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "Epoch": 0,
+      "PowerTable": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      }
+    }
+  ],
   "SupplementalData": {
-    "Commitments": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0
-    ],
-    "PowerTable": null
+    "Commitments": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "PowerTable": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    }
   },
   "Signers": [
-    0
+    2,
+    2,
+    1,
+    1,
+    1,
+    1
   ],
-  "Signature": null,
-  "PowerTableDelta": null
+  "Signature": "VW5EYWRhU2VB",
+  "PowerTableDelta": [
+    {
+      "ParticipantID": 0,
+      "PowerDelta": "0",
+      "SigningKey": "QmFScmVsRVll"
+    }
+  ]
 }
 ```
 
@@ -5874,7 +5892,7 @@ Perms: read
 Inputs:
 ```json
 [
-  24
+  25
 ]
 ```
 
@@ -5889,7 +5907,7 @@ Perms: read
 Inputs:
 ```json
 [
-  24
+  25
 ]
 ```
 
@@ -6802,7 +6820,8 @@ Response:
     "UpgradeDragonHeight": 10101,
     "UpgradePhoenixHeight": 10101,
     "UpgradeWaffleHeight": 10101,
-    "UpgradeTuktukHeight": 10101
+    "UpgradeTuktukHeight": 10101,
+    "UpgradeTeepHeight": 10101
   },
   "Eip155ChainID": 123
 }
@@ -6832,7 +6851,7 @@ Inputs:
 Response: `"Bw=="`
 
 ### StateGetRandomnessDigestFromTickets
-StateGetRandomnessDigestFromTickets. is used to sample the chain for randomness.
+StateGetRandomnessDigestFromTickets is used to sample the chain for randomness.
 
 
 Perms: read
@@ -7145,6 +7164,31 @@ Response:
   }
 }
 ```
+
+### StateMarketProposalPending
+StateMarketProposalPending returns whether a given proposal CID is marked as pending in the market actor
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  },
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response: `true`
 
 ### StateMarketStorageDeal
 StateMarketStorageDeal returns information about the indicated deal
@@ -7817,7 +7861,7 @@ Inputs:
 ]
 ```
 
-Response: `24`
+Response: `25`
 
 ### StateReadState
 StateReadState returns the indicated actor's state.

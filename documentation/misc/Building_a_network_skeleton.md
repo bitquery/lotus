@@ -71,7 +71,7 @@ The table below gives an overview of how Lotus and its critical dependencies rel
 There is a network skeleton in Lotus, which bubbles up all the other dependencies, and allows one to run a 2k-network and see that it switches network version from nv(XX-1) --> nvXX
 
 ## Notes
-1. This is the overarching tracking issue for the network skeleton update, but thare are tasks that needed to be completed in other repos as well.  All PRs for this effort can reference this issue.
+1. This is the overarching tracking issue for the network skeleton update, but there are tasks that need to be completed in other repos as well.  All PRs for this effort can reference this issue.
 2. How to create a skeleton in Lotus is documented here: https://github.com/filecoin-project/lotus/blob/master/documentation/misc/Building_a_network_skeleton.md
 
 ```[tasklist]
@@ -101,7 +101,7 @@ There is a network skeleton in Lotus, which bubbles up all the other dependencie
 
 You can take a look at [this Ref-FVM PR as a reference](https://github.com/filecoin-project/ref-fvm/pull/2029), which added the skeleton for network version 24. You can also check out the [releasing primary FVM crates checklist here](https://github.com/filecoin-project/ref-fvm/blob/master/CONTRIBUTING.md#primary-fvm-crates)
 
-2. In a seperate PR bump the Ref-FVM version:
+2. In a separate PR bump the Ref-FVM version:
 
     - Bump the version in the root Cargo.toml file.
     - Bump the fvm, fvm_shared and fvm_sdk versions in the `workspace` section in `ref-fvm/cargo.toml`
@@ -179,7 +179,7 @@ You can take a look at [this PR as a reference](https://github.com/filecoin-proj
 
     👉 You can take a look at this [Filecoin-FFI PR as a reference](https://github.com/filecoin-project/filecoin-ffi/pull/481), which was for network version 24.
 
-Note: one only needs to update `filecion-ffi`'s dependency on `go-state-types` when a network upgrade is introducing new types in `go-state-types`  (see [below](#new-types-in-go-state-types)).  Otherwise, `filecion-ffi`'s dependency on `go-state-types` is just updated when doing fiinal releases before the network upgrade.
+Note: one only needs to update `filecoin-ffi`'s dependency on `go-state-types` when a network upgrade is introducing new types in `go-state-types`  (see [below](#new-types-in-go-state-types)).  Otherwise, `filecoin-ffi`'s dependency on `go-state-types` is just updated when doing final releases before the network upgrade.
 
 ## Lotus Checklist
 
@@ -456,9 +456,14 @@ Typically it's safe to not upgrade filecoin-ffi's version of go-state-types.  Th
             return xerrors.Errorf("error getting lookback ts for premigration: %w", err)
         }
 
+        logPeriod, err := getMigrationProgressLogPeriod()
+        if err != nil {
+            return xerrors.Errorf("error getting progress log period: %w", err)
+        }
+
         config := migration.Config{
             MaxWorkers:        uint(workerCount),
-            ProgressLogPeriod: time.Minute * 5,
+            ProgressLogPeriod: logPeriod,
         }
 
         _, err = upgradeActorsV(XX+1)Common(ctx, sm, cache, lbRoot, epoch, lbts, config)
@@ -472,11 +477,17 @@ Typically it's safe to not upgrade filecoin-ffi's version of go-state-types.  Th
         if workerCount <= 0 {
             workerCount = 1
         }
+
+        logPeriod, err := getMigrationProgressLogPeriod()
+        if err != nil {
+            return cid.Undef, xerrors.Errorf("error getting progress log period: %w", err)
+        }
+
         config := migration.Config{
             MaxWorkers:        uint(workerCount),
             JobQueueSize:      1000,
             ResultQueueSize:   100,
-            ProgressLogPeriod: 10 * time.Second,
+            ProgressLogPeriod: logPeriod,
         }
         newRoot, err := upgradeActorsV(XX+1)Common(ctx, sm, cache, root, epoch, ts, config)
         if err != nil {
