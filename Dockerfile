@@ -1,5 +1,5 @@
 #####################################
-FROM golang:1.22.7-bullseye AS lotus-builder
+FROM golang:1.23.7-bullseye AS lotus-builder
 MAINTAINER Lotus Development Team
 
 RUN apt-get update && apt-get install -y ca-certificates build-essential clang ocl-icd-opencl-dev ocl-icd-libopencl1 jq libhwloc-dev
@@ -32,6 +32,8 @@ RUN set -eux; \
 
 COPY ./ /opt/filecoin
 WORKDIR /opt/filecoin
+
+RUN scripts/docker-git-state-check.sh
 
 ### make configurable filecoin-ffi build
 ARG FFI_BUILD_FROM_SOURCE=0

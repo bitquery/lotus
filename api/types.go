@@ -157,10 +157,10 @@ type NetworkParams struct {
 	NetworkName             dtypes.NetworkName
 	BlockDelaySecs          uint64
 	ConsensusMinerMinPower  abi.StoragePower
-	SupportedProofTypes     []abi.RegisteredSealProof
 	PreCommitChallengeDelay abi.ChainEpoch
 	ForkUpgradeParams       ForkUpgradeParams
 	Eip155ChainID           int
+	GenesisTimestamp        uint64
 }
 
 type ForkUpgradeParams struct {
@@ -194,6 +194,7 @@ type ForkUpgradeParams struct {
 	UpgradeWaffleHeight      abi.ChainEpoch
 	UpgradeTuktukHeight      abi.ChainEpoch
 	UpgradeTeepHeight        abi.ChainEpoch
+	UpgradeTockHeight        abi.ChainEpoch
 }
 
 // ChainExportConfig holds configuration for chain ranged exports.

@@ -16,6 +16,8 @@ $(warning Your Golang version is go$(shell expr $(GOVERSION) / 1000000).$(shell 
 $(error Update Golang to version to at least $(shell cat GO_VERSION_MIN))
 endif
 
+GOLANGCI_LINT_VERSION=v1.60.1
+
 # git modules that need to be loaded
 MODULES:=
 
@@ -283,6 +285,12 @@ unittests:  ## Run unit tests
 	@$(GOCC) test $(shell go list ./... | grep -v /lotus/itests)
 .PHONY: unittests
 
+lint:
+	go mod tidy
+	go vet ./...
+	go run github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run --timeout 10m --concurrency 4
+.PHONY: lint
+
 clean:  ## Clean build artifacts
 	rm -rf $(CLEAN) $(BINS)
 	-$(MAKE) -C $(FFI_PATH) clean
@@ -348,8 +356,7 @@ snap: lotus lotus-miner lotus-worker  ## Build snap package
 	snapcraft
 	# snapcraft upload ./lotus_*.snap
 
-# separate from gen because it needs binaries
-docsgen-cli: lotus lotus-miner lotus-worker  ## Generate CLI documentation
+docsgen-cli:  ## Generate CLI documentation
 	$(GOCC) run ./scripts/docsgen-cli
 .PHONY: docsgen-cli
 

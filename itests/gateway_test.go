@@ -18,6 +18,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-f3"
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-state-types/abi"
 	init2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
@@ -352,6 +353,13 @@ func sendFunds(ctx context.Context, fromNode *kit.TestFullNode, fromAddr address
 }
 
 func TestGatewayRateLimits(t *testing.T) {
+	t.Skip("this test is flaky and needs to be fixed")
+	// Fails on the RequireDuration check, e.g. error like:
+	// 	Max difference between 2025-02-10 12:05:34.63725116 +0000 UTC m=+30.240446844 and 2025-02-10 12:05:33.519935593 +0000 UTC m=+29.123131278 allowed is 800ms, but difference was 1.117315566s
+	// There may be additional calls going through the API that only show up at random and these
+	// aren't accounted for. See note below about paymentChannelSettler, which is one such call.
+	// Tracking issue: https://github.com/filecoin-project/lotus/issues/12566
+
 	req := require.New(t)
 
 	kit.QuietMiningLogs()
@@ -569,11 +577,11 @@ func TestGatewayF3(t *testing.T) {
 		nodes := startNodes(ctx, t)
 
 		cert, err := nodes.lite.F3GetLatestCertificate(ctx)
-		require.ErrorContains(t, err, "F3 is not running")
+		require.ErrorContains(t, err, f3.ErrF3NotRunning.Error())
 		require.Nil(t, cert)
 
 		cert, err = nodes.lite.F3GetCertificate(ctx, 2)
-		require.ErrorContains(t, err, "F3 is not running")
+		require.ErrorContains(t, err, f3.ErrF3NotRunning.Error())
 		require.Nil(t, cert)
 	})
 

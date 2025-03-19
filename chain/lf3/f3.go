@@ -79,7 +79,7 @@ func New(mctx helpers.MetricsCtx, lc fx.Lifecycle, params F3Params) (*F3, error)
 	// maxLeasableInstances is the maximum number of leased F3 instances this node
 	// would give out.
 	const maxLeasableInstances = 5
-	status := func() (*manifest.Manifest, gpbft.Instant) {
+	status := func() (*manifest.Manifest, gpbft.InstanceProgress) {
 		return module.Manifest(), module.Progress()
 	}
 	fff := &F3{
@@ -187,7 +187,7 @@ func (fff *F3) GetLatestCert(ctx context.Context) (*certs.FinalityCertificate, e
 func (fff *F3) GetManifest(ctx context.Context) (*manifest.Manifest, error) {
 	m := fff.inner.Manifest()
 	if m == nil {
-		return nil, xerrors.New("no known network manifest")
+		return nil, manifest.ErrNoManifest
 	}
 	if m.InitialPowerTable.Defined() {
 		return m, nil
@@ -215,7 +215,7 @@ func (fff *F3) IsRunning() bool {
 	return fff.inner.IsRunning()
 }
 
-func (fff *F3) Progress() gpbft.Instant {
+func (fff *F3) Progress() gpbft.InstanceProgress {
 	return fff.inner.Progress()
 }
 

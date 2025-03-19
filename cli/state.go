@@ -240,6 +240,12 @@ var StateSectorsCmd = &cli.Command{
 	Name:      "sectors",
 	Usage:     "Query the sector set of a miner",
 	ArgsUsage: "[minerAddress]",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "show-partitions",
+			Usage: "show sector deadlines and partitions",
+		},
+	},
 	Action: func(cctx *cli.Context) error {
 		api, closer, err := GetFullNodeAPI(cctx)
 		if err != nil {
@@ -268,8 +274,23 @@ var StateSectorsCmd = &cli.Command{
 			return err
 		}
 
+		showPartitions := cctx.Bool("show-partitions")
+		header := "Sector Number, Sealed CID"
+		if showPartitions {
+			header = "Sector Number, Deadline, Partition, Sealed CID"
+		}
+		fmt.Println(header)
+
 		for _, s := range sectors {
-			fmt.Printf("%d: %s\n", s.SectorNumber, s.SealedCID)
+			if showPartitions {
+				sp, err := api.StateSectorPartition(ctx, maddr, s.SectorNumber, ts.Key())
+				if err != nil {
+					return err
+				}
+				fmt.Printf("%d, %d, %d, %s\n", s.SectorNumber, sp.Deadline, sp.Partition, s.SealedCID)
+			} else {
+				fmt.Printf("%d, %s\n", s.SectorNumber, s.SealedCID)
+			}
 		}
 
 		return nil
@@ -1470,6 +1491,11 @@ var StateSectorCmd = &cli.Command{
 			return err
 		}
 
+		nv, err := api.StateNetworkVersion(ctx, ts.Key())
+		if err != nil {
+			return err
+		}
+
 		si, err := api.StateSectorGetInfo(ctx, maddr, abi.SectorNumber(sid), ts.Key())
 		if err != nil {
 			return err
@@ -1484,7 +1510,6 @@ var StateSectorCmd = &cli.Command{
 		if si.SectorKeyCID != nil {
 			fmt.Println("SectorKeyCID: ", si.SectorKeyCID)
 		}
-		fmt.Println("DealIDs: ", si.DealIDs)
 		fmt.Println()
 		fmt.Println("Activation: ", cliutil.EpochTimeTs(ts.Height(), si.Activation, ts))
 		fmt.Println("Expiration: ", cliutil.EpochTimeTs(ts.Height(), si.Expiration, ts))
@@ -1492,8 +1517,14 @@ var StateSectorCmd = &cli.Command{
 		fmt.Println("DealWeight: ", si.DealWeight)
 		fmt.Println("VerifiedDealWeight: ", si.VerifiedDealWeight)
 		fmt.Println("InitialPledge: ", types.FIL(si.InitialPledge))
-		fmt.Println("ExpectedDayReward: ", types.FIL(si.ExpectedDayReward))
-		fmt.Println("ExpectedStoragePledge: ", types.FIL(si.ExpectedStoragePledge))
+		if nv < network.Version25 {
+			if si.ExpectedDayReward != nil {
+				fmt.Println("ExpectedDayReward: ", types.FIL(*si.ExpectedDayReward))
+			}
+			if si.ExpectedStoragePledge != nil {
+				fmt.Println("ExpectedStoragePledge: ", types.FIL(*si.ExpectedStoragePledge))
+			}
+		}
 		fmt.Println()
 
 		sp, err := api.StateSectorPartition(ctx, maddr, abi.SectorNumber(sid), ts.Key())

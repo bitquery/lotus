@@ -90,7 +90,7 @@ type FullNode interface {
 	// Returns:
 	//   - *types.IndexValidation: A pointer to an IndexValidation struct containing the results of the validation/backfill.
 	//   - error: An error object if the validation/backfill fails. The error message will contain details about the index
-	//            corruption if the call fails because of an incosistency between indexed data and the actual chain state.
+	//            corruption if the call fails because of an inconsistency between indexed data and the actual chain state.
 	//            Note: The API returns an error if the index does not have data for the specified epoch and backfill is set to false.
 	ChainValidateIndex(ctx context.Context, epoch abi.ChainEpoch, backfill bool) (*types.IndexValidation, error) //perm:write
 
@@ -446,6 +446,8 @@ type FullNode interface {
 	// StateMinerRecoveries returns a bitfield indicating the recovering sectors of the given miner
 	StateMinerRecoveries(context.Context, address.Address, types.TipSetKey) (bitfield.BitField, error) //perm:read
 	// StateMinerPreCommitDepositForPower returns the precommit deposit for the specified miner's sector
+	// Note: The value returned is overestimated by 10% (multiplied by 110/100).
+	// See: node/impl/full/state.go StateMinerPreCommitDepositForPower implementation.
 	StateMinerPreCommitDepositForPower(context.Context, address.Address, miner.SectorPreCommitInfo, types.TipSetKey) (types.BigInt, error) //perm:read
 	// StateMinerInitialPledgeCollateral attempts to calculate the initial pledge collateral based on a SectorPreCommitInfo.
 	// This method uses the DealIDs field in SectorPreCommitInfo to determine the amount of verified
@@ -453,6 +455,8 @@ type FullNode interface {
 	// the introduction of DDO, the DealIDs field can no longer be used to reliably determine verified
 	// deal space; therefore, this method is deprecated. Use StateMinerInitialPledgeForSector instead
 	// and pass in the verified deal space directly.
+	// Note: The value returned is overestimated by 10% (multiplied by 110/100).
+	// See: node/impl/full/state.go StateMinerInitialPledgeCollateral implementation.
 	//
 	// Deprecated: Use StateMinerInitialPledgeForSector instead.
 	StateMinerInitialPledgeCollateral(context.Context, address.Address, miner.SectorPreCommitInfo, types.TipSetKey) (types.BigInt, error) //perm:read
@@ -460,6 +464,8 @@ type FullNode interface {
 	// duration, size, and combined size of any verified pieces within the sector. This calculation
 	// depends on current network conditions (total power, total pledge and current rewards) at the
 	// given tipset.
+	// Note: The value returned is overestimated by 10% (multiplied by 110/100).
+	// See: node/impl/full/state.go StateMinerInitialPledgeForSector implementation.
 	StateMinerInitialPledgeForSector(ctx context.Context, sectorDuration abi.ChainEpoch, sectorSize abi.SectorSize, verifiedSize uint64, tsk types.TipSetKey) (types.BigInt, error) //perm:read
 	// StateMinerAvailableBalance returns the portion of a miner's balance that can be withdrawn or spent
 	StateMinerAvailableBalance(context.Context, address.Address, types.TipSetKey) (types.BigInt, error) //perm:read
@@ -607,6 +613,8 @@ type FullNode interface {
 	StateVerifiedRegistryRootKey(ctx context.Context, tsk types.TipSetKey) (address.Address, error) //perm:read
 	// StateDealProviderCollateralBounds returns the min and max collateral a storage provider
 	// can issue. It takes the deal size and verified status as parameters.
+	// Note: The min value returned is overestimated by 10% (multiplied by 110/100).
+	// See: node/impl/full/state.go StateDealProviderCollateralBounds implementation.
 	StateDealProviderCollateralBounds(context.Context, abi.PaddedPieceSize, bool, types.TipSetKey) (DealCollateralBounds, error) //perm:read
 
 	// StateCirculatingSupply returns the exact circulating supply of Filecoin at the given tipset.
@@ -1030,7 +1038,7 @@ type FullNode interface {
 	// it's enabled, and an error when disabled entirely.
 	F3IsRunning(ctx context.Context) (bool, error) //perm:read
 	// F3GetProgress returns the progress of the current F3 instance in terms of instance ID, round and phase.
-	F3GetProgress(ctx context.Context) (gpbft.Instant, error) //perm:read
+	F3GetProgress(ctx context.Context) (gpbft.InstanceProgress, error) //perm:read
 	// F3ListParticipants returns the list of miners that are currently participating in F3 via this node.
 	F3ListParticipants(ctx context.Context) ([]F3Participant, error) //perm:read
 }
@@ -1171,7 +1179,7 @@ type ChannelAvailableFunds struct {
 	// QueuedAmt is the amount that is queued up behind a pending request
 	QueuedAmt types.BigInt
 
-	// VoucherRedeemedAmt is the amount that is redeemed by vouchers on-chain
+	// VoucherReedeemedAmt is the amount that is redeemed by vouchers on-chain
 	// and in the local datastore
 	VoucherReedeemedAmt types.BigInt
 }
@@ -1397,6 +1405,7 @@ const (
 type Deadline struct {
 	PostSubmissions      bitfield.BitField
 	DisputableProofCount uint64
+	DailyFee             abi.TokenAmount
 }
 
 type Partition struct {

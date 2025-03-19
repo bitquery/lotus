@@ -53,33 +53,33 @@ const UpgradeHyggeHeight = -21
 const UpgradeLightningHeight = -22
 const UpgradeThunderHeight = -23
 const UpgradeWatermelonHeight = -24
-const UpgradeDragonHeight = -25
-const UpgradePhoenixHeight = -26
-const UpgradeWaffleHeight = -27
-const UpgradeTuktukHeight = -28
-
-// ??????
-const UpgradeTeepHeight = 100
-
-// FIP-0081: for the power actor state for pledge calculations.
-// UpgradeTuktukPowerRampDurationEpochs ends up in the power actor state after
-// Tuktuk migration. along with a RampStartEpoch matching the upgrade height.
-var UpgradeTuktukPowerRampDurationEpochs = uint64(builtin.EpochsInYear)
 
 // This fix upgrade only ran on calibrationnet
 const UpgradeWatermelonFixHeight = -100
 
 // This fix upgrade only ran on calibrationnet
 const UpgradeWatermelonFix2Height = -101
+const UpgradeDragonHeight = -25
 
 // This fix upgrade only ran on calibrationnet
 const UpgradeCalibrationDragonFixHeight = -102
+const UpgradePhoenixHeight = -26
+const UpgradeWaffleHeight = -27
+const UpgradeTuktukHeight = -28
 
-var SupportedProofTypes = []abi.RegisteredSealProof{
-	abi.RegisteredSealProof_StackedDrg512MiBV1,
-	abi.RegisteredSealProof_StackedDrg32GiBV1,
-	abi.RegisteredSealProof_StackedDrg64GiBV1,
-}
+// FIP-0081: for the power actor state for pledge calculations.
+// UpgradeTuktukPowerRampDurationEpochs ends up in the power actor state after
+// Tuktuk migration. along with a RampStartEpoch matching the upgrade height.
+var UpgradeTuktukPowerRampDurationEpochs = uint64(builtin.EpochsInYear)
+
+// ??????
+const UpgradeTeepHeight = 100
+
+var UpgradeTeepInitialFilReserved = wholeFIL(1_600_000_000) // FIP-0100: 300M -> 1.6B FIL
+
+// ??????
+const UpgradeTockHeight = 200
+
 var ConsensusMinerMinPower = abi.NewStoragePower(2 << 30)
 var PreCommitChallengeDelay = abi.ChainEpoch(150)
 
@@ -113,4 +113,5 @@ var F3ManifestServerID = MustParseID("12D3KooWJr9jy4ngtJNR7JC1xgLFra3DjEtyxskRYW
 // The initial F3 power table CID.
 var F3InitialPowerTableCID cid.Cid = cid.Undef
 
-const F3BootstrapEpoch abi.ChainEpoch = 1000
+const F3BootstrapEpoch abi.ChainEpoch = -1
+const F3ParamsAddress = "0x9fd3B2D38EE4C920c9954DA752eDF810887501c1"
