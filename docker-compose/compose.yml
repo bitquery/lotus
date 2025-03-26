@@ -6,7 +6,7 @@ x-common-network: &common-network
   networks:
     - common
 x-common-restart: &common-restart
-  restart: "no"
+  restart: "always"
 x-graceful-stop: &graceful-stop
   stop_grace_period: 5m
   stop_signal: SIGINT
