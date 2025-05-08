@@ -7,7 +7,91 @@
 > * [CHANGELOG_1.1x.md](./documentation/changelog/CHANGELOG_1.1x.md) - v1.10.0 to v1.19.0
 > * [CHANGELOG_1.2x.md](./documentation/changelog/CHANGELOG_1.2x.md) - v1.20.0 to v1.29.2
 
-# UNRELEASED
+# Node v1.33.0 / 2025-05-08
+The Lotus v1.33.0 release introduces experimental v2 APIs with F3 awareness, featuring a new TipSet selection mechanism that significantly enhances how applications interact with the Filecoin blockchain. This release candidate also adds F3-aware Ethereum APIs via the /v2 endpoint.  All of the /v2 APIs implement intelligent fallback mechanisms between F3 and Expected Consensus and are exposed through the Lotus Gateway.
+
+Please review the detailed documentation for these experimental APIs, as they are subject to change and have important operational considerations for node operators and API providers.
+
+## ☢️ Upgrade Warnings ☢️
+- There are no upgrade warnings for this release candidate.
+
+## ⭐ Feature/Improvement Highlights:
+
+### Experimental v2 APIs with F3 awareness
+
+The Lotus V2 APIs introduce a powerful new TipSet selection mechanism that significantly enhances how applications interact with the Filecoin blockchain. The design reduces API footprint, seamlessly handles both traditional Expected Consensus (EC) and the new F3 protocol, and provides graceful fallbacks.
+
+> [!NOTE]
+> V2 APIs are highly experimental and subject to change without notice.
+
+See [Filecoin v2 APIs docs](https://filoznotebook.notion.site/Filecoin-V2-APIs-1d0dc41950c1808b914de5966d501658) for an in-depth overview. /v2 APIs are exosed through Lotus Gateway. 
+
+This work was primarily done in ([filecoin-project/lotus#13003](https://github.com/filecoin-project/lotus/pull/13003)), ([filecoin-project/lotus#13027](https://github.com/filecoin-project/lotus/pull/13027)), ([filecoin-project/lotus#13034](https://github.com/filecoin-project/lotus/pull/13034)), ([filecoin-project/lotus#13075](https://github.com/filecoin-project/lotus/pull/13075)), ([filecoin-project/lotus#13066](https://github.com/filecoin-project/lotus/pull/13066))
+
+### F3-aware Ethereum APIs via `/v2` endpoint and improvements to existing `/v1` APIs
+
+Lotus now offers two versions of its Ethereum-compatible APIs (`eth_*`, `trace_*`, `net_*`, `web3_*` and associated `Filecoin.*` APIs including Filecoin-specific functions such as `Filecoin.EthAddressToFilecoinAddress` and `Filecoin.FilecoinAddressToEthAddress`) with different finality handling:
+* **`/v2` APIs (New & Experimental):** These APIs consult the F3 subsystem (if enabled) for finality information.
+  * `"finalized"` tag maps to the F3 finalized epoch.
+  * `"safe"` tag maps to the F3 finalized epoch or 200 epochs behind head, whichever is more recent.
+* **`/v1` APIs (Existing & Recommended):** These maintain behavior closer to pre-F3 Lotus (EC finality) for compatibility.
+  * `"finalized"` tag continues to use a fixed 900-epoch delay from the head (EC finality).
+  * `"safe"` tag uses a 30-epoch delay from the head.
+  * _One or both of these tags may be adjusted in a future upgrade to take advantage of F3 finality._
+* **Note:** Previously, `"finalized"` and `"safe"` tags referred to epochs `N-1`. This `-1` offset has been removed in both V1 and V2.
+* Additional improvements affecting **both `/v1` and `/v2`** Ethereum APIs:
+  * `eth_getBlockTransactionCountByNumber` now accepts standard Ethereum block specifiers (hex numbers _or_ tags like `"latest"`, `"safe"`, `"finalized"`).
+  * Methods accepting `BlockNumberOrHash` now support all standard tags (`"pending"`, `"latest"`, `"safe"`, `"finalized"`). This includes `eth_estimateGas`, `eth_call`, `eth_getCode`, `eth_getStorageAt`, `eth_getBalance`, `eth_getTransactionCount`, and `eth_getBlockReceipts`.
+  * Removed internal `Eth*Limited` methods (e.g., `EthGetTransactionByHashLimited`) from the supported gateway API surface.
+  * Improved error handling: block selection endpoints now consistently return `ErrNullRound` (and corresponding JSONRPC errors) for null tipsets.
+
+This work was done in ([filecoin-project/lotus#13026](https://github.com/filecoin-project/lotus/pull/13026)), ([filecoin-project/lotus#13070](https://github.com/filecoin-project/lotus/pull/13070)).
+
+### Others
+- feat: add gas to application metric reporting `vm/applyblocks_early_gas`, `vm/applyblocks_messages_gas`, `vm/applyblocks_cron_gas` ([filecoin-project/lotus#13030](https://github.com/filecoin-project/lotus/pull/13030))
+- feat(metrics): capture total gas metric from ApplyBlocks ([filecoin-project/lotus#13037](https://github.com/filecoin-project/lotus/pull/13037))
+- feat: add F3 Grafana Dashboard Template ([filecoin-project/lotus#12934](https://github.com/filecoin-project/lotus/pull/12934))
+- fix(f3): limit the concurrency of F3 power table calculation ([filecoin-project/lotus#13085](https://github.com/filecoin-project/lotus/pull/13085))
+- feat(f3): remove dynnamic manifest functionality and use static manifest ([filecoin-project/lotus#13074](https://github.com/filecoin-project/lotus/pull/13074))
+
+## 🐛 Bug Fix Highlights
+- fix(eth): apply limit in EthGetBlockReceiptsLimited ([filecoin-project/lotus#12883](https://github.com/filecoin-project/lotus/pull/12883))
+- fix(eth): always return nil for eth transactions not found ([filecoin-project/lotus#12999](https://github.com/filecoin-project/lotus/pull/12999))
+- fix(deps): fix Ledger hardware wallet support ([filecoin-project/lotus#13048](https://github.com/filecoin-project/lotus/pull/13048))
+
+## 📝 Changelog
+
+For the full set of changes since the last stable release:
+
+- Node: https://github.com/filecoin-project/lotus/compare/release/v1.32.3...release/v1.33.0
+
+## 👨‍👩‍👧‍👦 Contributors
+
+Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| Rod Vagg | 19 | +13805/-3639 | 129 |
+| Masih H. Derkani | 19 | +11910/-2369 | 119 |
+| Jakub Sztandera | 14 | +2528/-202 | 32 |
+| Phi-rjan | 12 | +1707/-79 | 42 |
+| Steve Loeppky | 3 | +1287/-32 | 8 |
+| Piotr Galar | 2 | +298/-3 | 4 |
+| Barbara Peric | 3 | +182/-73 | 5 |
+| ZenGround0 | 1 | +191/-0 | 4 |
+| CoolCu | 1 | +15/-49 | 6 |
+| Volker Mische | 1 | +18/-31 | 5 |
+| Phi | 3 | +32/-14 | 10 |
+| dependabot[bot] | 1 | +15/-15 | 2 |
+| Amit Gaikwad | 1 | +19/-2 | 2 |
+| tom | 1 | +0/-14 | 2 |
+| xixishidibei | 1 | +2/-11 | 1 |
+| Tomass | 1 | +4/-4 | 2 |
+| tsinghuacoder | 1 | +3/-2 | 1 |
+| dropbigfish | 1 | +1/-1 | 1 |
+| James Niken | 1 | +1/-1 | 1 |
+| Hubert | 1 | +1/-0 | 1 |
+| Steven Allen | 1 | +0/-0 | 2 |
 
 # Node v1.32.3 / 2025-04-29
 
@@ -26,7 +110,7 @@ For the set of changes since the last stable release:
 
 # Node and Miner v1.32.2 / 2025-04-04
 
-This Lotus v1.32.2 release is a **MANDATORY patch release**. After the Calibration network upgraded to nv25, a bug was discovered in the ref-fvm KAMT library affecting ERC-20 token minting operations. You can read the the full techincal breakdown of the issue [here](https://github.com/filecoin-project/builtin-actors/pull/1667).
+This Lotus v1.32.2 release is a **MANDATORY patch release**. After the Calibration network upgraded to nv25, a bug was discovered in the ref-fvm KAMT library affecting ERC-20 token minting operations. You can read the full techincal breakdown of the issue [here](https://github.com/filecoin-project/builtin-actors/pull/1667).
 
 This patch release includes the following updates:
 - Schedules a mandatory Calibration upgrade, happening on `2025-04-07T23:00:00Z`, to fix the ERC-20 token minting bug on the Calibration network.
@@ -59,7 +143,6 @@ For certain node operators, such as full archival nodes or systems that need to 
 - chore: update new Mainnet nv25 date to 2025-04-14T23:00:00Z ([filecoin-project/lotus#13007](https://github.com/filecoin-project/lotus/pull/13007)).
 - chore: make TockFix epoch for 2k network configurable ([filecoin-project/lotus#13008](https://github.com/filecoin-project/lotus/pull/13008)).
 - chore(deps): update filecoin-ffi ([filecoin-project/lotus#13011](https://github.com/filecoin-project/lotus/pull/13011)).
-
 
 ## 📝 Changelog
 
@@ -150,7 +233,6 @@ For the set of changes since the last stable release:
 
 ## 👨‍👩‍👧‍👦 Contributors
 
-
 | Contributor | Commits | Lines ± | Files Changed |
 |-------------|---------|---------|---------------|
 | Rod Vagg | 46 | +16240/-12784 | 286 |
@@ -192,8 +274,7 @@ For the set of changes since the last stable release:
 
 # Node and Miner v1.32.0 / 2025-03-27
 
-This is the stable release of the **upcoming MANDATORY Lotus v1.32.0 release**, which will deliver the Filecoin network version 25, codenamed “Teep” 🦵. This release candidate sets the upgrade epoch for the Mainnet to **Epoch 4867320 - 2025-04-10T23:00:00Z**. This is equivalent to:
-
+This is the stable release of the **upcoming MANDATORY Lotus v1.32.0 release**, which will deliver the Filecoin network version 25, codenamed “Teep” 🦵. This release candidate sets the upgrade epoch for the Mainnet to **Epoch 4867320 - 2025-04-10T23:00:00Z**.
 
 ## ☢️ Upgrade Warnings ☢️
 - If you are running the v1.30.0 version of Lotus, please go through the Upgrade Warnings section for the [v1.31.0 releases](https://github.com/filecoin-project/lotus/releases/tag/v1.31.0) and [v1.31.1](https://github.com/filecoin-project/lotus/releases/tag/v1.31.1) before upgrading to this release.
@@ -266,11 +347,10 @@ For certain node operators, such as full archival nodes or systems that need to 
 
 For the set of changes since the last stable release:
 
-- Node: https://github.com/filecoin-project/lotus/compare/v1.31.1...v1.32.0
-- Miner: https://github.com/filecoin-project/lotus/compare/v1.31.1...miner/v1.32.0
+- Node: https://github.com/filecoin-project/lotus/compare/v1.31.1...v1.32.1
+- Miner: https://github.com/filecoin-project/lotus/compare/v1.31.1...miner/v1.32.1
 
 ## 👨‍👩‍👧‍👦 Contributors
-
 
 | Contributor | Commits | Lines ± | Files Changed |
 |-------------|---------|---------|---------------|
@@ -382,7 +462,7 @@ https://github.com/filecoin-project/lotus/compare/v1.31.0...v1.31.1
 The Lotus v1.31.0 release introduces the new `ChainIndexer` subsystem, enhancing the indexing of Filecoin chain state for improved RPC performance. Several bug fixes in the block production loop are also included. Please review the upgrade warnings and documentation for any important changes affecting RPC providers, node operators and storage providers.
 
 ## ⭐ New Feature Highlights:
-- New ChainIndexer subsystem to index Filecoin chain state such as tipsets, messages, events and ETH transactions for accurate and faster RPC responses. The `ChainIndexer` replaces the existing `MsgIndex`, `EthTxHashLookup` and `EventIndex` implementations in Lotus, which [suffer from a multitude of known problems](https://github.com/filecoin-project/lotus/issues/12293).  If you are an RPC provider or a node operator who uses or exposes Ethereum and/or events APIs, please refer to the [ChainIndexer documentation for operators](./documentation/en/chain-indexer-overview-for-operators.md) for information on how to enable, configure and use the new Indexer.  While there is no automated data migration and one can upgrade and downgrade without backups, there are manual steps that need to be taken to backfill data when upgrading to this Lotus version, or downgrading to the previous version without ChainIndexer. Please be aware that that this feature removes some options in the Lotus configuration file, if these have been set, Lotus will report an error when starting. See the documentation for more information
+- New ChainIndexer subsystem to index Filecoin chain state such as tipsets, messages, events and ETH transactions for accurate and faster RPC responses. The `ChainIndexer` replaces the existing `MsgIndex`, `EthTxHashLookup` and `EventIndex` implementations in Lotus, which [suffer from a multitude of known problems](https://github.com/filecoin-project/lotus/issues/12293).  If you are an RPC provider or a node operator who uses or exposes Ethereum and/or events APIs, please refer to the [ChainIndexer documentation for operators](./documentation/en/chain-indexer-overview-for-operators.md) for information on how to enable, configure and use the new Indexer.  While there is no automated data migration and one can upgrade and downgrade without backups, there are manual steps that need to be taken to backfill data when upgrading to this Lotus version, or downgrading to the previous version without ChainIndexer. Please be aware that this feature removes some options in the Lotus configuration file, if these have been set, Lotus will report an error when starting. See the documentation for more information
 - `lotus chain head` now supports a `--height` flag to print just the epoch number of the current chain head ([filecoin-project/lotus#12609](https://github.com/filecoin-project/lotus/pull/12609))
 - Implement `EthGetTransactionByBlockNumberAndIndex` (`eth_getTransactionByBlockNumberAndIndex`) and `EthGetTransactionByBlockHashAndIndex` (`eth_getTransactionByBlockHashAndIndex`) methods. ([filecoin-project/lotus#12618](https://github.com/filecoin-project/lotus/pull/12618))
 - `lotus-shed indexes inspect-indexes` now performs a comprehensive comparison of the event index data for each message by comparing the AMT root CID from the message receipt with the root of a reconstructed AMT. Previously `inspect-indexes` simply compared event counts.  Comparing AMT roots instead confirms all the event data is byte-perfect. ([filecoin-project/lotus#12570](https://github.com/filecoin-project/lotus/pull/12570))
@@ -435,8 +515,8 @@ This is the final release of the MANDATORY Lotus v1.30.0 release, which delivers
 - If you are running the v1.28.x version of Lotus, please go through the Upgrade Warnings section for the v1.28.* releases and v1.29.*, before upgrading to this release.
 - This release requires a minimum Go version of v1.22.7 or higher.
 - The `releases` branch has been deprecated with the 202408 split of 'Lotus Node' and 'Lotus Miner'. See https://github.com/filecoin-project/lotus/blob/master/LOTUS_RELEASE_FLOW.md#why-is-the-releases-branch-deprecated-and-what-are-alternatives for more info and alternatives for getting the latest release for both the 'Lotus Node' and 'Lotus Miner' based on the Branch and Tag Strategy.
-   - To get the latest Lotus Node tag: git tag -l 'v*' | sort -V -r | head -n 1
-   - To get the latest Lotus Miner tag: git tag -l 'miner/v*' | sort -V -r | head -n 1
+  - To get the latest Lotus Node tag: git tag -l 'v*' | sort -V -r | head -n 1
+  - To get the latest Lotus Miner tag: git tag -l 'miner/v*' | sort -V -r | head -n 1
 
 ## 🏛️ Filecoin network version 24 FIPs
 

@@ -6,8 +6,10 @@ import (
 
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"go.uber.org/fx"
 
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/v2api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/node/impl/common"
@@ -33,7 +35,7 @@ type FullNodeAPI struct {
 	full.MsigAPI
 	full.WalletAPI
 	full.SyncAPI
-	full.FullEthAPI
+	full.FullEthAPIV1
 	full.ActorEventsAPI
 	full.F3API
 	full.ChainIndexAPI
@@ -121,3 +123,13 @@ func (n *FullNodeAPI) NodeStatus(ctx context.Context, inclChainStatus bool) (sta
 }
 
 var _ api.FullNode = &FullNodeAPI{}
+
+type FullNodeAPIv2 struct {
+	fx.In
+
+	full.ChainModuleAPIv2
+	full.StateModuleAPIv2
+	full.FullEthAPIV2
+}
+
+var _ v2api.FullNode = &FullNodeAPIv2{}

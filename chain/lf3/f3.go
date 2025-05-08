@@ -29,6 +29,21 @@ import (
 	"github.com/filecoin-project/lotus/node/repo"
 )
 
+var _ F3Backend = (*F3)(nil)
+
+type F3Backend interface {
+	GetOrRenewParticipationTicket(_ context.Context, minerID uint64, previous api.F3ParticipationTicket, instances uint64) (api.F3ParticipationTicket, error)
+	Participate(_ context.Context, ticket api.F3ParticipationTicket) (api.F3ParticipationLease, error)
+	ListParticipants() []api.F3Participant
+	GetManifest(ctx context.Context) (*manifest.Manifest, error)
+	GetCert(ctx context.Context, instance uint64) (*certs.FinalityCertificate, error)
+	GetLatestCert(ctx context.Context) (*certs.FinalityCertificate, error)
+	GetPowerTable(ctx context.Context, tsk types.TipSetKey) (gpbft.PowerEntries, error)
+	GetF3PowerTable(ctx context.Context, tsk types.TipSetKey) (gpbft.PowerEntries, error)
+	IsRunning() bool
+	Progress() gpbft.InstanceProgress
+}
+
 type F3 struct {
 	inner *f3.F3
 	ec    *ecWrapper
@@ -58,11 +73,7 @@ var log = logging.Logger("f3")
 
 func New(mctx helpers.MetricsCtx, lc fx.Lifecycle, params F3Params) (*F3, error) {
 	ds := namespace.Wrap(params.Datastore, datastore.NewKey("/f3"))
-	ec := &ecWrapper{
-		ChainStore:   params.ChainStore,
-		StateManager: params.StateManager,
-		Syncer:       params.Syncer,
-	}
+	ec := newEcWrapper(params.ChainStore, params.Syncer, params.StateManager)
 	verif := blssig.VerifierWithKeyOnG1()
 
 	f3FsPath := filepath.Join(params.LockedRepo.Path(), "f3")

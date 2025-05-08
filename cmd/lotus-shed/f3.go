@@ -25,7 +25,6 @@ import (
 	"github.com/filecoin-project/go-f3/manifest"
 	"github.com/filecoin-project/go-state-types/abi"
 
-	"github.com/filecoin-project/lotus/chain/lf3"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
 	lcli "github.com/filecoin-project/lotus/cli"
@@ -40,7 +39,6 @@ var f3Cmd = &cli.Command{
 	Subcommands: []*cli.Command{
 		f3ClearStateCmd,
 		f3GenExplicitPower,
-		f3CheckActivation,
 		f3CheckActivationRaw,
 	},
 }
@@ -72,49 +70,6 @@ func loadF3IDList(path string) ([]gpbft.ActorID, error) {
 	}
 
 	return ids, nil
-}
-
-var f3CheckActivation = &cli.Command{
-	Name:  "check-activation",
-	Usage: "queries f3 parameters contract using chain module",
-
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:  "contract",
-			Usage: "address contract to query",
-		},
-	},
-	Action: func(cctx *cli.Context) error {
-		config := lf3.Config{
-			BaseNetworkName:      "filecoin",
-			ContractAddress:      cctx.String("contract"),
-			ContractPollInterval: 15 * time.Second,
-		}
-		api, closer, err := cliutil.GetFullNodeAPIV1(cctx)
-		if err != nil {
-			return fmt.Errorf("getting api: %w", err)
-		}
-		defer closer()
-		ctx := cliutil.ReqContext(cctx)
-		prov, err := lf3.NewManifestProvider(ctx, &config, nil, nil, nil, api)
-		if err != nil {
-			return fmt.Errorf("creating manifest proivder: %w", err)
-		}
-
-		err = prov.Start(ctx)
-		if err != nil {
-			return fmt.Errorf("starting manifest provider: %w", err)
-		}
-		for {
-			select {
-			case m := <-prov.ManifestUpdates():
-				log.Infof("new manifest: %+v\n", m)
-			case <-ctx.Done():
-				_ = prov.Stop(context.Background())
-				return nil
-			}
-		}
-	},
 }
 
 var f3CheckActivationRaw = &cli.Command{

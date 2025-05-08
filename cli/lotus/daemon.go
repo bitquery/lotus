@@ -31,6 +31,8 @@ import (
 	"github.com/filecoin-project/go-paramfetch"
 
 	lapi "github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/v1api"
+	"github.com/filecoin-project/lotus/api/v2api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain/beacon/drand"
@@ -376,13 +378,21 @@ var DaemonCmd = &cli.Command{
 		// for RPC calls
 		liteModeDeps := node.Options()
 		if isLite {
-			gapi, closer, err := lcli.GetGatewayAPI(cctx)
+			gapiv1, closerV1, err := lcli.GetGatewayAPIV1(cctx)
 			if err != nil {
 				return err
 			}
+			defer closerV1()
 
-			defer closer()
-			liteModeDeps = node.Override(new(lapi.Gateway), gapi)
+			gapiv2, closerV2, err := lcli.GetGatewayAPIV2(cctx)
+			if err != nil {
+				return err
+			}
+			defer closerV2()
+
+			liteModeDeps = node.Options(
+				node.Override(new(lapi.Gateway), gapiv1),
+				node.Override(new(v2api.Gateway), gapiv2))
 		}
 
 		// some libraries like ipfs/go-ds-measure and ipfs/go-ipfs-blockstore
@@ -392,9 +402,11 @@ var DaemonCmd = &cli.Command{
 			log.Warnf("unable to inject prometheus ipfs/go-metrics exporter; some metrics will be unavailable; err: %s", err)
 		}
 
-		var api lapi.FullNode
+		var v1 v1api.FullNode
+		var v2 v2api.FullNode
 		stop, err := node.New(ctx,
-			node.FullAPI(&api, node.Lite(isLite)),
+			node.FullAPI(&v1, node.Lite(isLite)),
+			node.FullAPIv2(&v2),
 
 			node.Base(),
 			node.Repo(r),
@@ -424,7 +436,7 @@ var DaemonCmd = &cli.Command{
 		}
 
 		if cctx.String("import-key") != "" {
-			if err := importKey(ctx, api, cctx.String("import-key")); err != nil {
+			if err := importKey(ctx, v1, cctx.String("import-key")); err != nil {
 				log.Errorf("importing key failed: %+v", err)
 			}
 		}
@@ -445,7 +457,7 @@ var DaemonCmd = &cli.Command{
 		}
 
 		// Instantiate the full node handler.
-		h, err := node.FullNodeHandler(api, true, serverOptions...)
+		h, err := node.FullNodeHandler(v1, v2, true, serverOptions...)
 		if err != nil {
 			return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 		}

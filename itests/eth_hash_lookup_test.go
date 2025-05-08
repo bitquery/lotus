@@ -18,6 +18,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
 	"github.com/filecoin-project/lotus/itests/kit"
+	"github.com/filecoin-project/lotus/lib/must"
 )
 
 // TestTransactionHashLookup tests to see if lotus correctly stores a mapping from ethereum transaction hash to
@@ -88,7 +89,7 @@ func TestTransactionHashLookup(t *testing.T) {
 	require.Equal(t, hash, mpoolTx.Hash)
 
 	// Wait for message to land on chain
-	var receipt *api.EthTxReceipt
+	var receipt *ethtypes.EthTxReceipt
 	for i := 0; i < 20; i++ {
 		receipt, err = client.EthGetTransactionReceipt(ctx, hash)
 		if err != nil || receipt == nil {
@@ -113,6 +114,11 @@ func TestTransactionHashLookup(t *testing.T) {
 	require.NotEmpty(t, *chainTx.BlockHash)
 	require.NotNil(t, chainTx.TransactionIndex)
 	require.Equal(t, uint64(*chainTx.TransactionIndex), uint64(0)) // only transaction
+
+	// test transaction that doesn't exist, should return nil
+	receipt, err = client.EthGetTransactionReceipt(ctx, must.One(ethtypes.ParseEthHash("0x123456789012345678901234567890123456789012345678901234567890123")))
+	require.NoError(t, err)
+	require.Nil(t, receipt)
 }
 
 // TestTransactionHashLookupBlsFilecoinMessage tests to see if lotus can find a BLS Filecoin Message using the transaction hash
@@ -152,14 +158,14 @@ func TestTransactionHashLookupBlsFilecoinMessage(t *testing.T) {
 
 	// Assert that BLS messages cannot be retrieved from the message pool until it lands
 	// on-chain via the eth API.
-	_, err = client.EthGetTransactionByHash(ctx, &hash)
-	require.Error(t, err)
+	trans, err := client.EthGetTransactionByHash(ctx, &hash)
+	require.Nil(t, trans)
 
 	// Now start mining.
 	ens.InterconnectAll().BeginMining(blocktime)
 
 	// Wait for message to land on chain
-	var receipt *api.EthTxReceipt
+	var receipt *ethtypes.EthTxReceipt
 	for i := 0; i < 20; i++ {
 		receipt, err = client.EthGetTransactionReceipt(ctx, hash)
 		if err != nil || receipt == nil {
@@ -417,7 +423,7 @@ func TestEthGetMessageCidByTransactionHashEthTx(t *testing.T) {
 	require.Equal(t, *unsignedMessage, *mpoolTx)
 
 	// Wait for message to land on chain
-	var receipt *api.EthTxReceipt
+	var receipt *ethtypes.EthTxReceipt
 	for i := 0; i < 20; i++ {
 		receipt, err = client.EthGetTransactionReceipt(ctx, hash)
 		if err != nil || receipt == nil {

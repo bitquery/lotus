@@ -1,6 +1,7 @@
 package docgen
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -38,6 +39,7 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	"github.com/filecoin-project/lotus/api/v0api"
+	"github.com/filecoin-project/lotus/api/v2api"
 	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/verifreg"
@@ -87,6 +89,13 @@ func init() {
 
 	ExampleValues[reflect.TypeOf(addr)] = addr
 	ExampleValues[reflect.TypeOf(&addr)] = &addr
+
+	var ts types.TipSet
+	err = json.Unmarshal(tipsetSampleJson, &ts)
+	if err != nil {
+		panic(err)
+	}
+	addExample(&ts)
 
 	pid, err := peer.Decode("12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf")
 	if err != nil {
@@ -468,6 +477,7 @@ func init() {
 		},
 		Input: ecchain,
 	})
+	addExample(types.TipSetSelectors.Finalized)
 }
 
 func GetAPIType(name, pkg string) (i interface{}, t reflect.Type, permStruct []reflect.Type) {
@@ -505,6 +515,19 @@ func GetAPIType(name, pkg string) (i interface{}, t reflect.Type, permStruct []r
 			permStruct = append(permStruct, reflect.TypeOf(v0api.FullNodeStruct{}.Internal))
 			permStruct = append(permStruct, reflect.TypeOf(v0api.CommonStruct{}.Internal))
 			permStruct = append(permStruct, reflect.TypeOf(v0api.NetStruct{}.Internal))
+		default:
+			panic("unknown type")
+		}
+	case "v2api":
+		switch name {
+		case "FullNode":
+			i = &v2api.FullNodeStruct{}
+			t = reflect.TypeOf(new(struct{ v2api.FullNode })).Elem()
+			permStruct = append(permStruct, reflect.TypeOf(v2api.FullNodeStruct{}.Internal))
+		case "Gateway":
+			i = &v2api.GatewayStruct{}
+			t = reflect.TypeOf(new(struct{ v2api.Gateway })).Elem()
+			permStruct = append(permStruct, reflect.TypeOf(v2api.GatewayStruct{}.Internal))
 		default:
 			panic("unknown type")
 		}
@@ -817,3 +840,6 @@ func MethodGroupFromName(mn string) string {
 	}
 	return mn[:i+1]
 }
+
+//go:embed tipset.json
+var tipsetSampleJson []byte
