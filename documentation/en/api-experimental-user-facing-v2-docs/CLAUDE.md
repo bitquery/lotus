@@ -9,7 +9,7 @@ This directory contains the experimental user-facing documentation for Filecoin'
 
 ## Workflow
 1. (If this hasn't already been don) Copy updates from Notion into this repository
-2. Make changes, likely using Claude Code by pointing to to local changes or changes in a PR.
+2. Make changes, likely using Claude Code by pointing to local changes or changes in a PR.
 2. Regenerate the table of contents if you've added or modified sections
 3. Submit changes for team review via pull request
 4. After approval, publish updated content back to Notion
@@ -18,8 +18,10 @@ This directory contains the experimental user-facing documentation for Filecoin'
 
 ## Key Files
 - `api-v2-experimental.md`: The main user facing documentation file that is copied to Notion.
-- Related code: `api/v2api/full.go` (API implementation)
+- Related code: `api/v2api/full.go` (API definition)
 - Related code: `chain/types/tipset_selector.go` (Key types)
+- Related code: `node/impl/full/chain_v2.go` (API implementation)
+- Related code: `node/impl/full/state_v2.go` (API implementation)
 - Related code: `node/impl/eth/api.go` (ETH V2 API implementation)
 - Related code: `node/impl/eth/tipsetresolver.go` (ETH block specifier to tipset conversion)
 - Related code: `node/impl/eth/filecoin.go` (Filecoin-specific ETH methods)

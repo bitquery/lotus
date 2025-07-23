@@ -2,17 +2,16 @@ package lf3
 
 import (
 	"context"
-	"runtime"
 	"sort"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-f3/ec"
 	"github.com/filecoin-project/go-f3/gpbft"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/builtin"
 
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
@@ -29,24 +28,18 @@ var (
 )
 
 type ecWrapper struct {
-	chainStore                 *store.ChainStore
-	syncer                     *chain.Syncer
-	stateManager               *stmgr.StateManager
-	cache                      *lru.TwoQueueCache[types.TipSetKey, gpbft.PowerEntries]
-	powerTableComputeSemaphore chan struct{}
+	chainStore   *store.ChainStore
+	syncer       *chain.Syncer
+	stateManager *stmgr.StateManager
+
+	mapReduceCache builtin.MapReduceCache
 }
 
 func newEcWrapper(chainStore *store.ChainStore, syncer *chain.Syncer, stateManager *stmgr.StateManager) *ecWrapper {
-	cache, err := lru.New2Q[types.TipSetKey, gpbft.PowerEntries](128)
-	if err != nil {
-		panic(err)
-	}
 	return &ecWrapper{
-		chainStore:                 chainStore,
-		syncer:                     syncer,
-		stateManager:               stateManager,
-		cache:                      cache,
-		powerTableComputeSemaphore: make(chan struct{}, min(4, runtime.NumCPU()/2)),
+		chainStore:   chainStore,
+		syncer:       syncer,
+		stateManager: stateManager,
 	}
 }
 
@@ -137,26 +130,7 @@ func (ec *ecWrapper) GetPowerTable(ctx context.Context, tskF3 gpbft.TipSetKey) (
 }
 
 func (ec *ecWrapper) getPowerTableLotusTSK(ctx context.Context, tsk types.TipSetKey) (gpbft.PowerEntries, error) {
-	{
-		// check the cache
-		pe, ok := ec.cache.Get(tsk)
-		if ok {
-			return pe, nil
-		}
-		// take the semaphore
-		select {
-		case ec.powerTableComputeSemaphore <- struct{}{}:
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-		defer func() { <-ec.powerTableComputeSemaphore }()
-
-		// check the cache again
-		pe, ok = ec.cache.Get(tsk)
-		if ok {
-			return pe, nil
-		}
-	}
+	// Finally, do the actual compute.
 	ts, err := ec.chainStore.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("getting tipset by key for get parent: %w", err)
@@ -176,15 +150,19 @@ func (ec *ecWrapper) getPowerTableLotusTSK(ctx context.Context, tsk types.TipSet
 		return nil, xerrors.Errorf("loading power actor state: %w", err)
 	}
 
+	claims, err := powerState.CollectEligibleClaims(&ec.mapReduceCache)
+	if err != nil {
+		return nil, xerrors.Errorf("collecting valid claims: %w", err)
+	}
 	var powerEntries gpbft.PowerEntries
-	err = powerState.ForEachClaim(func(minerAddr address.Address, claim power.Claim) error {
+	for _, claim := range claims {
 		if claim.QualityAdjPower.Sign() <= 0 {
-			return nil
+			continue
 		}
 
-		id, err := address.IDFromAddress(minerAddr)
+		id, err := address.IDFromAddress(claim.Address)
 		if err != nil {
-			return xerrors.Errorf("transforming address to ID: %w", err)
+			return nil, xerrors.Errorf("transforming address to ID: %w", err)
 		}
 
 		pe := gpbft.PowerEntry{
@@ -192,49 +170,44 @@ func (ec *ecWrapper) getPowerTableLotusTSK(ctx context.Context, tsk types.TipSet
 			Power: claim.QualityAdjPower,
 		}
 
-		act, err := state.GetActor(minerAddr)
+		act, err := state.GetActor(claim.Address)
 		if err != nil {
-			return xerrors.Errorf("(get sset) failed to load miner actor: %w", err)
+			return nil, xerrors.Errorf("(get sset) failed to load miner actor: %w", err)
 		}
 		mstate, err := miner.Load(ec.chainStore.ActorStore(ctx), act)
 		if err != nil {
-			return xerrors.Errorf("(get sset) failed to load miner actor state: %w", err)
+			return nil, xerrors.Errorf("(get sset) failed to load miner actor state: %w", err)
 		}
 
 		info, err := mstate.Info()
 		if err != nil {
-			return xerrors.Errorf("failed to load actor info: %w", err)
+			return nil, xerrors.Errorf("failed to load actor info: %w", err)
 		}
 		// check fee debt
 		if debt, err := mstate.FeeDebt(); err != nil {
-			return err
+			return nil, err
 		} else if !debt.IsZero() {
 			// fee debt don't add the miner to power table
-			return nil
+			continue
 		}
 		// check consensus faults
 		if ts.Height() <= info.ConsensusFaultElapsed {
-			return nil
+			continue
 		}
 
 		waddr, err := vm.ResolveToDeterministicAddr(state, ec.chainStore.ActorStore(ctx), info.Worker)
 		if err != nil {
-			return xerrors.Errorf("resolve miner worker address: %w", err)
+			return nil, xerrors.Errorf("resolve miner worker address: %w", err)
 		}
 
 		if waddr.Protocol() != address.BLS {
-			return xerrors.Errorf("wrong type of worker address")
+			return nil, xerrors.Errorf("wrong type of worker address")
 		}
 		pe.PubKey = waddr.Payload()
 		powerEntries = append(powerEntries, pe)
-		return nil
-	}, true)
-	if err != nil {
-		return nil, xerrors.Errorf("collecting the power table: %w", err)
 	}
 
 	sort.Sort(powerEntries)
-	ec.cache.Add(tsk, powerEntries)
 
 	return powerEntries, nil
 }

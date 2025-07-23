@@ -9,8 +9,6 @@ import (
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/go-f3/manifest"
-
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v2api"
 	"github.com/filecoin-project/lotus/build"
@@ -45,6 +43,7 @@ import (
 	"github.com/filecoin-project/lotus/node/impl/full"
 	"github.com/filecoin-project/lotus/node/impl/gasutils"
 	"github.com/filecoin-project/lotus/node/impl/net"
+	"github.com/filecoin-project/lotus/node/impl/paych"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/lp2p"
@@ -120,13 +119,6 @@ var ChainNode = Options(
 	Override(new(wallet.Default), From(new(*wallet.LocalWallet))),
 	Override(new(api.Wallet), From(new(wallet.MultiWallet))),
 
-	// Service: Payment channels
-	Override(new(paychmgr.PaychAPI), From(new(modules.PaychAPI))),
-	Override(new(*paychmgr.Store), modules.NewPaychStore),
-	Override(new(*paychmgr.Manager), modules.NewManager),
-	Override(HandlePaymentChannelManagerKey, modules.HandlePaychManager),
-	Override(SettlePaymentChannelsKey, settler.SettlePaymentChannels),
-
 	// Markets (storage)
 	Override(new(*market.FundManager), market.NewFundManager),
 
@@ -154,6 +146,7 @@ var ChainNode = Options(
 		Override(new(full.EthTraceAPIV2), From(new(v2api.Gateway))),
 		Override(new(full.EthGasAPIV1), From(new(api.Gateway))),
 		Override(new(full.EthGasAPIV2), From(new(v2api.Gateway))),
+		If(build.IsF3Enabled(), Override(new(full.F3CertificateProvider), From(new(api.Gateway)))),
 		// EthSendAPI is a special case, we block the Untrusted method via GatewayEthSend even though it
 		// shouldn't be exposed on the Gateway API.
 		Override(new(eth.EthSendAPI), new(modules.GatewayEthSend)),
@@ -185,11 +178,13 @@ var ChainNode = Options(
 		Override(HandleIncomingMessagesKey, modules.HandleIncomingMessages),
 		Override(HandleIncomingBlocksKey, modules.HandleIncomingBlocks),
 	),
-
-	If(build.IsF3Enabled(),
+	ApplyIf(func(s *Settings) bool {
+		return build.IsF3Enabled() && !isLiteNode(s)
+	},
+		Override(new(dtypes.F3DS), modules.F3Datastore),
 		Override(new(*lf3.Config), lf3.NewConfig),
-		Override(new(manifest.ManifestProvider), lf3.NewManifestProvider),
 		Override(new(lf3.F3Backend), lf3.New),
+		Override(new(full.F3ModuleAPI), From(new(full.F3API))),
 	),
 )
 
@@ -359,6 +354,18 @@ func ConfigFullNode(c interface{}) Option {
 			If(cfg.ChainIndexer.EnableIndexer,
 				Override(InitChainIndexerKey, modules.InitChainIndexer(cfg.ChainIndexer)),
 			),
+		),
+
+		If(cfg.PaymentChannels.EnablePaymentChannelManager,
+			Override(new(paychmgr.ManagerNodeAPI), From(new(modules.PaychManagerNodeAPI))),
+			Override(new(*paychmgr.Store), modules.NewPaychStore),
+			Override(new(*paychmgr.Manager), modules.NewManager),
+			Override(HandlePaymentChannelManagerKey, modules.HandlePaychManager),
+			Override(SettlePaymentChannelsKey, settler.SettlePaymentChannels),
+			Override(new(paych.PaychAPI), From(new(paych.PaychImpl))),
+		),
+		If(!cfg.PaymentChannels.EnablePaymentChannelManager,
+			Override(new(paych.PaychAPI), new(paych.DisabledPaych)),
 		),
 	)
 }

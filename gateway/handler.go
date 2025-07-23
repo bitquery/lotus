@@ -1,7 +1,9 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -41,12 +43,16 @@ type ShutdownHandler interface {
 
 var _ ShutdownHandler = (*statefulCallHandler)(nil)
 var _ ShutdownHandler = (*RateLimitHandler)(nil)
+var _ ShutdownHandler = (*CORSHandler)(nil)
+var _ ShutdownHandler = (*LoggingHandler)(nil)
 
 // handlerOptions holds the options for the Handler function.
 type handlerOptions struct {
 	perConnectionAPIRateLimit   int
 	perHostConnectionsPerMinute int
 	jsonrpcServerOptions        []jsonrpc.ServerOption
+	enableCORS                  bool
+	enableRequestLogging        bool
 }
 
 // HandlerOption is a functional option for configuring the Handler.
@@ -78,6 +84,20 @@ func WithPerHostConnectionsPerMinute(limit int) HandlerOption {
 func WithJsonrpcServerOptions(options ...jsonrpc.ServerOption) HandlerOption {
 	return func(opts *handlerOptions) {
 		opts.jsonrpcServerOptions = options
+	}
+}
+
+// WithCORS sets whether to enable CORS headers to allow cross-origin requests from web browsers.
+func WithCORS(enable bool) HandlerOption {
+	return func(opts *handlerOptions) {
+		opts.enableCORS = enable
+	}
+}
+
+// WithRequestLogging sets whether to enable request logging.
+func WithRequestLogging(enable bool) HandlerOption {
+	return func(opts *handlerOptions) {
+		opts.enableRequestLogging = enable
 	}
 }
 
@@ -123,16 +143,29 @@ func Handler(gateway *Node, options ...HandlerOption) (ShutdownHandler, error) {
 	m.Handle("/health/readyz", node.NewReadyHandler(gateway.v1Proxy.server))
 	m.PathPrefix("/").Handler(http.DefaultServeMux)
 
-	handler := &statefulCallHandler{m}
+	var handler http.Handler = &statefulCallHandler{m}
+
+	// Apply logging middleware if enabled
+	if opts.enableRequestLogging {
+		handler = NewLoggingHandler(handler)
+	}
+
+	// Apply CORS wrapper if enabled
+	if opts.enableCORS {
+		handler = NewCORSHandler(handler)
+	}
+
+	// Apply rate limiting wrapper if enabled
 	if opts.perConnectionAPIRateLimit > 0 || opts.perHostConnectionsPerMinute > 0 {
-		return NewRateLimitHandler(
+		handler = NewRateLimitHandler(
 			handler,
 			opts.perConnectionAPIRateLimit,
 			opts.perHostConnectionsPerMinute,
 			connectionLimiterCleanupInterval,
-		), nil
+		)
 	}
-	return handler, nil
+
+	return handler.(ShutdownHandler), nil
 }
 
 type statefulCallHandler struct {
@@ -285,6 +318,92 @@ func (h *RateLimitHandler) cleanupExpiredLimiters(ctx context.Context) {
 func (h *RateLimitHandler) Shutdown(ctx context.Context) error {
 	h.cancelFunc()
 	return shutdown(ctx, h.next)
+}
+
+// CORSHandler handles CORS headers for cross-origin requests.
+type CORSHandler struct {
+	next http.Handler
+}
+
+// NewCORSHandler creates a new CORSHandler that wraps the provided handler
+// and adds appropriate CORS headers to allow cross-origin requests from web browsers.
+func NewCORSHandler(next http.Handler) *CORSHandler {
+	return &CORSHandler{next: next}
+}
+
+func (h *CORSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, X-Requested-With")
+	w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
+
+	// Handle preflight OPTIONS requests
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	h.next.ServeHTTP(w, r)
+}
+
+func (h *CORSHandler) Shutdown(ctx context.Context) error {
+	return shutdown(ctx, h.next)
+}
+
+// LoggingHandler logs incoming HTTP requests with details
+type LoggingHandler struct {
+	next http.Handler
+}
+
+// NewLoggingHandler creates a new LoggingHandler that logs request details
+func NewLoggingHandler(next http.Handler) *LoggingHandler {
+	return &LoggingHandler{next: next}
+}
+
+func (h *LoggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Prepare log fields
+	logFields := []interface{}{
+		"remote_ip", getRemoteIP(r),
+		"method", r.Method,
+		"url", r.URL.String(),
+	}
+
+	// For POST requests, try to read and log up to maxLogBodyBytes of the body
+	const maxLogBodyBytes = 1024
+	if r.Method == http.MethodPost {
+		limited := &io.LimitedReader{R: r.Body, N: maxLogBodyBytes + 1}
+		buf, err := io.ReadAll(limited)
+		if err == nil {
+			var bodyStr string
+			if int64(len(buf)) > maxLogBodyBytes {
+				bodyStr = string(buf[:maxLogBodyBytes]) + "...[truncated]"
+			} else {
+				bodyStr = string(buf)
+			}
+			logFields = append(logFields, "body", bodyStr)
+			// Reconstruct the body for downstream handlers: combine what we read and the rest
+			rest := io.MultiReader(bytes.NewReader(buf), r.Body)
+			r.Body = io.NopCloser(rest)
+		}
+	}
+
+	log.Infow("request", logFields...)
+
+	h.next.ServeHTTP(w, r)
+}
+
+func (h *LoggingHandler) Shutdown(ctx context.Context) error {
+	return shutdown(ctx, h.next)
+}
+
+// getRemoteIP returns the remote IP address from the request.
+func getRemoteIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 func shutdown(ctx context.Context, handler http.Handler) error {

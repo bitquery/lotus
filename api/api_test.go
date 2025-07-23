@@ -66,7 +66,7 @@ func TestReturnTypes(t *testing.T) {
 				case 1: // if 1 return value, it must be an error
 					require.Equal(t, errType, m.Type.Out(0), m.Name)
 
-				case 2: // if 2 return values, first cant be an interface/function, second must be an error
+				case 2: // if 2 return values, first can't be an interface/function, second must be an error
 					seen := map[reflect.Type]struct{}{}
 					todo := []reflect.Type{m.Type.Out(0)}
 					for len(todo) > 0 {
@@ -95,8 +95,12 @@ func TestReturnTypes(t *testing.T) {
 							todo = append(todo, typ.Elem())
 							todo = append(todo, typ.Key())
 						case reflect.Struct:
-							for i := 0; i < typ.NumField(); i++ {
-								todo = append(todo, typ.Field(i).Type)
+							// If the struct implements json.Marshaler, it handles its own marshaling
+							// so we don't need to check its fields
+							if !typ.Implements(jmarsh) {
+								for i := 0; i < typ.NumField(); i++ {
+									todo = append(todo, typ.Field(i).Type)
+								}
 							}
 						}
 					}

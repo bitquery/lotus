@@ -756,7 +756,7 @@ func (m *StateModule) StateWaitMsg(ctx context.Context, msg cid.Cid, confidence 
 			// This is not necessarily an error -- EVM methods (and in the future native actors) may
 			// return just bytes, and in the not so distant future we'll have native wasm actors
 			// that are by definition not in the registry.
-			// So in this case, log a debug message and retun the raw bytes.
+			// So in this case, log a debug message and return the raw bytes.
 			log.Debugf("failed to get return type: %s", err)
 			returndec = recpt.Return
 		case err != nil:
@@ -2221,6 +2221,7 @@ func (a *StateAPI) StateGetNetworkParams(ctx context.Context) (*api.NetworkParam
 			UpgradeTuktukHeight:      buildconstants.UpgradeTuktukHeight,
 			UpgradeTeepHeight:        buildconstants.UpgradeTeepHeight,
 			UpgradeTockHeight:        buildconstants.UpgradeTockHeight,
+			UpgradeXxHeight:          buildconstants.UpgradeXxHeight,
 		},
 	}, nil
 }
