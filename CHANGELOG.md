@@ -9,8 +9,8 @@
 
 # UNRELEASED
 
-# Node v1.33.1-rc1 / 2025-07-21
-This is the first release candidate of Lotus v1.33.1, which introduces performance improvements and operational enhancements. This release focuses on improving F3 subsystem performance, and enhancing CLI tools for better storage provider operations. Notable improvements include up to 6-10x performance gains in F3 power table calculations, ensuring that PreCommit and ProveCommit operations are aggregating to get optimal gas usage after FIP-100, and a enhanced sector management tool with CSV output support. These improvements collectively enhance the stability and efficiency of Lotus operations for both node operators and storage providers.
+# Node v1.33.1 / 2025-07-31
+This is the Lotus v1.33.1 release, which introduces performance improvements and operational enhancements. This release focuses on improving F3 subsystem performance, and enhancing CLI tools for better storage provider operations. Notable improvements include up to 6-10x performance gains in F3 power table calculations, ensuring that PreCommit and ProveCommit operations are aggregating to get optimal gas usage after FIP-100, and a enhanced sector management tool with CSV output support. These improvements collectively enhance the stability and efficiency of Lotus operations for both node operators and storage providers.
 
 ## ☢️ Upgrade Warnings ☢️
 - There are no upgrade warnings for this release candidate.
@@ -42,12 +42,13 @@ This is the first release candidate of Lotus v1.33.1, which introduces performan
 - chore: increase the F3 GMessage buffer size to 1024 ([filecoin-project/lotus#13126](https://github.com/filecoin-project/lotus/pull/13126))
 - chore: bump the pubsub validation queue length to 256 ([filecoin-project/lotus#13176](https://github.com/filecoin-project/lotus/pull/13176))
 - chore(deps): update of critical underlying dependencies with go-libp2p to v0.42.0 (filecoin-project/lotus#13190) and boxo to v0.32.0 ([filecoin-project/lotus#13202](https://github.com/filecoin-project/lotus/pull/13202)) and boxo v0.33.0([filecoin-project/lotus#13226](https://github.com/filecoin-project/lotus/pull/13226))
+- feat(spcli): correctly handle the batch logic of `lotus-miner actor settle-deal`; replace the dealid data source ([filecoin-project/lotus#13189](https://github.com/filecoin-project/lotus/pull/13189))
 
 ## 📝 Changelog
 
 For the full set of changes since the last stable release:
 
-- Node: https://github.com/filecoin-project/lotus/compare/release/v1.33.0...release/v1.33.1-rc1
+- Node: https://github.com/filecoin-project/lotus/compare/release/v1.33.0...release/v1.33.1
 
 ## 👨‍👩‍👧‍👦 Contributors
 
@@ -55,21 +56,22 @@ For the full set of changes since the last stable release:
 |-------------|---------|---------|---------------|
 | TippyFlits | 6 | +38440/-212 | 201 |
 | Masih H. Derkani | 32 | +10241/-3770 | 171 |
-| Jakub Sztandera | 26 | +2557/-1617 | 127 |
+| Jakub Sztandera | 33 | +2823/-1753 | 146 |
 | Rod Vagg | 17 | +2089/-238 | 67 |
 | Steven Allen | 7 | +885/-741 | 15 |
 | Steve Loeppky | 8 | +389/-395 | 29 |
+| hanabi1224 | 1 | +533/-8 | 5 |
+| Phi-rjan | 8 | +346/-169 | 37 |
 | Sarkazein | 3 | +364/-53 | 14 |
 | tediou5 | 4 | +48/-318 | 29 |
 | Barbara Peric | 5 | +315/-24 | 12 |
 | beck | 3 | +116/-89 | 8 |
-| Phi-rjan | 3 | +115/-69 | 14 |
 | dependabot[bot] | 21 | +92/-90 | 42 |
 | Łukasz Magiera | 1 | +173/-0 | 2 |
 | Copilot | 2 | +106/-66 | 5 |
 | Krishang Shah | 1 | +113/-0 | 5 |
-| Phi | 2 | +42/-31 | 12 |
-| Piotr Galar | 4 | +54/-3 | 7 |
+| Piotr Galar | 3 | +47/-3 | 6 |
+| Phi | 1 | +12/-12 | 11 |
 | terry.hung | 1 | +15/-6 | 1 |
 | Degen Dev | 2 | +8/-8 | 6 |
 | bytesingsong | 1 | +7/-7 | 6 |
