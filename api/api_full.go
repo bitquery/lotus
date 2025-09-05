@@ -46,9 +46,6 @@ const LookbackNoLimit = abi.ChainEpoch(-1)
 
 //                       MODIFYING THE API INTERFACE
 //
-// NOTE: This is the V1 (Unstable) API - to add methods to the V0 (Stable) API
-// you'll have to add those methods to interfaces in `api/v0api`
-//
 // When adding / changing methods in this file:
 // * Do the change here
 // * Adjust implementation in `node/impl/`
@@ -58,7 +55,9 @@ const LookbackNoLimit = abi.ChainEpoch(-1)
 //  * Generate markdown docs
 //  * Generate openrpc blobs
 
-// FullNode API is a low-level interface to the Filecoin network full node
+// FullNode API is a low-level interface to the Filecoin network full node.
+// This represents the Lotus v1 API, which is stable and maintains backward
+// compatibility.
 type FullNode interface {
 	Common
 	Net
@@ -107,8 +106,18 @@ type FullNode interface {
 
 	// ChainGetBlock returns the block specified by the given CID.
 	ChainGetBlock(context.Context, cid.Cid) (*types.BlockHeader, error) //perm:read
+
 	// ChainGetTipSet returns the tipset specified by the given TipSetKey.
 	ChainGetTipSet(context.Context, types.TipSetKey) (*types.TipSet, error) //perm:read
+
+	// ChainGetFinalizedTipSet returns the latest finalized tipset. It uses the
+	// current F3 instance to determine the finalized tipset.
+	// This is the tipset at the end of the last finalized round and can be used
+	// for follow-up querying of the chain state with the assurance that the
+	// state will not change.
+	// If F3 is operational and finalizing in this node. If not, it will fall back
+	// to the Expected Consensus (EC) finality definition of head - 900 epochs.
+	ChainGetFinalizedTipSet(ctx context.Context) (*types.TipSet, error) //perm:read
 
 	// ChainGetBlockMessages returns messages stored in the specified block.
 	//
@@ -467,6 +476,12 @@ type FullNode interface {
 	// Note: The value returned is overestimated by 10% (multiplied by 110/100).
 	// See: node/impl/full/state.go StateMinerInitialPledgeForSector implementation.
 	StateMinerInitialPledgeForSector(ctx context.Context, sectorDuration abi.ChainEpoch, sectorSize abi.SectorSize, verifiedSize uint64, tsk types.TipSetKey) (types.BigInt, error) //perm:read
+	// StateMinerCreationDeposit calculates the deposit required for creating a new miner
+	// according to FIP-0077 specification. This deposit is based on the network's current
+	// economic parameters including circulating supply, network power, and pledge collateral.
+	//
+	// See: node/impl/full/state.go StateMinerCreationDeposit implementation.
+	StateMinerCreationDeposit(ctx context.Context, tsk types.TipSetKey) (types.BigInt, error) //perm:read
 	// StateMinerAvailableBalance returns the portion of a miner's balance that can be withdrawn or
 	// spent. It is calculated by subtracting the following from the miner actor's balance:
 	// * Locked vesting funds (accounting for vesting funds that should already be unlocked)

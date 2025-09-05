@@ -66,6 +66,10 @@ func ActorDealSettlementCmd(getActor ActorAddressGetter) *cli.Command {
 				Usage: "skip to check the message status",
 			},
 			&cli.BoolFlag{
+				Name:  "all-deals",
+				Usage: "settle all deals. only expired deals are calculated by default",
+			},
+			&cli.BoolFlag{
 				Name:  "really-do-it",
 				Usage: "Actually send transaction performing the action",
 			},
@@ -96,6 +100,12 @@ func ActorDealSettlementCmd(getActor ActorAddressGetter) *cli.Command {
 					return err
 				}
 			}
+
+			head, err := api.ChainHead(ctx)
+			if err != nil {
+				return err
+			}
+			alldeals := cctx.Bool("all-deals")
 
 			var (
 				dealIDs []uint64
@@ -152,7 +162,13 @@ func ActorDealSettlementCmd(getActor ActorAddressGetter) *cli.Command {
 						return xerrors.Errorf("Error getting all deals for miner: %w", err)
 					}
 					for _, deal := range data {
-						dealIDs = append(dealIDs, uint64(deal))
+						marketDeal, err := api.StateMarketStorageDeal(ctx, deal, types.EmptyTSK)
+						if err != nil {
+							continue
+						}
+						if marketDeal.Proposal.EndEpoch < head.Height() || alldeals {
+							dealIDs = append(dealIDs, uint64(deal))
+						}
 					}
 				}
 			}
@@ -1368,7 +1384,7 @@ func ActorCompactAllocatedCmd(getActor ActorAddressGetter) *cli.Command {
 				if last <= m+1 {
 					return xerrors.Errorf("highest allocated sector lower than mask offset %d: %d", m+1, last)
 				}
-				// securty to not brick a miner
+				// security to not brick a miner
 				if last > 1<<60 {
 					return xerrors.Errorf("very high last sector number, refusing to mask: %d", last)
 				}
