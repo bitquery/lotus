@@ -9,19 +9,12 @@
 
 # UNRELEASED
 
+# Node and Miner v1.34.0 / 2025-09-11
 
-# Node and Miner v1.34.0-rc1 / 2025-09-04
-
-This is the first release candidate of the **upcoming MANDATORY Lotus v1.34.0 release**, which will deliver the Filecoin network version 27, codenamed “Golden Week” 🏮. This release candidate sets the upgrade epoch for the calibration network to **Epoch 3007294:  2025-09-10T23:00:00Z**.  (See the [local time for other timezones](https://www.worldtimebuddy.com/?qm=1&lid=100,5128581,5368361,1816670&h=100&date=2025-9-10&sln=23-24&hf=1&c=1196).)
-
-You can follow [filecoin-project/lotus#13269](https://github.com/filecoin-project/lotus/issues/13269) for keeping up with the other expected release dates, epochs, and updates.
-
-> [!NOTE]
-> 
-> This release candidate does NOT set the mainnet network upgrade epoch. It will be added in the final release (expected 2025-09-11).
+This is a **MANDATORY Lotus v1.34.0 release**, which will deliver the Filecoin network version 27, codenamed “Golden Week” 🏮. This release candidate sets the upgrade epoch for the Mainnet network to **Epoch 5348280:  2025-09-24T23:00:00Z**.  (See the [local time for other timezones](https://www.worldtimebuddy.com/?qm=1&lid=100,5128581,5368361,1816670&h=100&date=2025-9-24&sln=23-24&hf=1&c=1196).)  
 
 ## ☢️ Upgrade Warnings ☢️
-- All Lotus node and Storage Provider (SP) operators must upgrade to v1.34.x before the specified dates for the Calibration and Mainnet networks.
+- All Lotus node and Storage Provider (SP) operators must upgrade to v1.34.x before the specified date for the Mainnet network.
 - The `/v1` Ethereum APIs have "F3 awareness" for all Ethereum calls where `"finalized"` or `"safe"` are supplied.  Nodes will likely return different (and likely more recent) results in v1.34.x+ than previous versions when these tags are used.  See more info below.
 
 ## 🏛️ Filecoin network version 27 FIPs and FRCs
@@ -36,10 +29,17 @@ You can follow [filecoin-project/lotus#13269](https://github.com/filecoin-projec
 
 ## 📦 v17 Builtin Actor Bundle
 
-This release candidate uses [v17.0.0-dev1](https://github.com/filecoin-project/builtin-actors/releases/tag/v17.0.0-dev1).
+This release candidate uses [v17.0.0](https://github.com/filecoin-project/builtin-actors/releases/tag/v17.0.0).
 
 ## 🚚 Migration
-There is no pre-migration or migration with this network upgrade.
+All node operators, including storage providers, should be aware that ONE pre-migration is being scheduled 120 epochs before the network upgrade. The migration for the NV24 upgrade is expected to be light with no heavy pre-migrations:
+- Pre-Migration is expected to take less then 1 minute.
+- The migration on the upgrade epoch is expected to take less than 30 seconds on a node with a NVMe-drive and a newer CPU. For nodes running on slower disks/CPU, it is still expected to take less then 1 minute.
+- RAM usages is expected to be under 20GiB RAM for both the pre-migration and migration.
+
+We recommend node operators (who haven’t enabled splitstore discard mode) that do not care about historical chain states, to prune the chain blockstore by syncing from a snapshot 1-2 days before the upgrade.
+
+For certain node operators, such as full archival nodes or systems that need to keep large amounts of state (RPC providers), we recommend skipping the pre-migration and run the non-cached migration (i.e., just running the migration at the network upgrade epoch), and schedule for some additional downtime. Operators of such nodes can read the [How to disable premigration in network upgrade tutorial](https://lotus.filecoin.io/kb/disable-premigration/).
 
 ## ⭐ New Features highlight
 
@@ -61,27 +61,31 @@ There is no pre-migration or migration with this network upgrade.
 - fix: properly handle all RPC API retry errors ([#13279](https://github.com/filecoin-project/lotus/pull/13279))
 - fix(api): `eth_getCode` and `eth_getStorageAt` now return state after the specified block rather than before it ([filecoin-project/lotus#13274](https://github.com/filecoin-project/lotus/pull/13274))
 - fix(api): `eth_getTransactionCount` now returns state after the specified block rather than before it ([filecoin-project/lotus#13275](https://github.com/filecoin-project/lotus/pull/13275))
+- fix: handle partial reads in UnpadReader for non-power-of-2 pieces ([filecoin-project/lotus#13306](https://github.com/filecoin-project/lotus/pull/13306))
 
 ## 📝 Changelog
 
 For the set of changes since the last stable release:
 
 - Node: https://github.com/filecoin-project/lotus/compare/release/v1.33.1...release/v1.34.0
-- Miner: https://github.com/filecoin-project/lotus/compare/release/v1.3.1...release/miner/v1.34.1
+- Miner: https://github.com/filecoin-project/lotus/compare/release/v1.33.1...release/miner/v1.34.0
+
+### Changes since RC2
+- Updated to use final release versions of key dependencies, including builtin-actors.  See [filecoin-project/lotus#13337](https://github.com/filecoin-project/lotus/pull/13337)).
 
 ## 👨‍👩‍👧‍👦 Contributors
 
-| Contributor | Commits | Lines ± | Files Changed |
-|-------------|---------|---------|---------------|
-| Rod Vagg | 11 | +1780/-717 | 47 |
-| TippyFlits | 2 | +1058/-734 | 32 |
+| **Contributor** | **Commits** | **Lines ±** | **Files Changed** |
+|-----------------|-------------|-------------|-------------------|
+| Rod Vagg | 12 | +1856/-720 | 49 |
+| TippyFlits | 6 | +1312/-897 | 60 |
 | tediou5 | 1 | +610/-22 | 14 |
+| Phi-rjan | 11 | +455/-169 | 29 |
 | chris-4chain | 1 | +222/-23 | 7 |
 | Steven Allen | 1 | +142/-68 | 3 |
 | beck | 2 | +141/-52 | 8 |
-| Phi-rjan | 7 | +114/-75 | 20 |
 | dependabot[bot] | 12 | +81/-86 | 24 |
-| Steve Loeppky | 7 | +132/-29 | 7 |
+| Steve Loeppky | 5 | +90/-42 | 22 |
 | hanabi1224 | 2 | +91/-24 | 3 |
 | raul0ligma | 1 | +88/-4 | 5 |
 | William Morriss | 3 | +41/-13 | 7 |
@@ -98,7 +102,18 @@ For the set of changes since the last stable release:
 | Jakub Sztandera | 2 | +3/-3 | 3 |
 | Micke | 1 | +2/-2 | 2 |
 | longhutianjie | 1 | +1/-1 | 1 |
+| Piotr Galar | 1 | +1/-1 | 1 |
+| Phi | 1 | +1/-1 | 1 |
 
+# Node and Miner v1.34.0-rc2 / 2025-09-05
+
+This was the second release candidate of the **upcoming MANDATORY Lotus v1.34.0 release**, which will deliver the Filecoin network version 27, codenamed “Golden Week” 🏮. This release candidate set the upgrade epoch for the calibration network to **Epoch 3007294:  2025-09-10T23:00:00Z**.  
+
+# Node and Miner v1.34.0-rc1 / 2025-09-04
+
+This was the first release candidate for the **upcoming MANDATORY Lotus v1.34.0 release**.  It has been superceded by RC2, which is now required to participate in the nv27 calibration upgrade.
+
+This release candidate uses the outdated [v17.0.0-dev1](https://github.com/filecoin-project/builtin-actors/releases/tag/v17.0.0-dev1).
 
 # Node v1.33.1 / 2025-07-31
 This is the Lotus v1.33.1 release, which introduces performance improvements and operational enhancements. This release focuses on improving F3 subsystem performance, and enhancing CLI tools for better storage provider operations. Notable improvements include up to 6-10x performance gains in F3 power table calculations, ensuring that PreCommit and ProveCommit operations are aggregating to get optimal gas usage after FIP-100, and a enhanced sector management tool with CSV output support. These improvements collectively enhance the stability and efficiency of Lotus operations for both node operators and storage providers.
