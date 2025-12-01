@@ -9,13 +9,82 @@
 
 # UNRELEASED
 
+# Node and Miner v1.34.2 / 2025-12-01
+
+The Lotus and Lotus-Miner v1.34.2 release includes numerous bug fixes, CLI enhancements, and dependency updates. These improvements, along with updated dependencies, enhance the stability and usability of Lotus for both node operators and storage providers.
+
+## ☢️ Upgrade Warnings ☢️
+
+- The minimum supported Golang version is now `1.24.7`
+
+## Features and Bug Fixes
+
+- feat(gateway): expose StateGetRandomnessDigestFromBeacon ([filecoin-project/lotus#13339](https://github.com/filecoin-project/lotus/pull/13339))
+- fix(cli): add deposit-margin-factor to the new miner commands ([filecoin-project/lotus#13365](https://github.com/filecoin-project/lotus/pull/13365))
+- feat(spcli): add a `deposit-margin-factor` option to `lotus-miner actor new` and `lotus-shed miner create` so the sent deposit still covers the on-chain requirement if it rises between lookup and execution ([filecoin-project/lotus#13407](https://github.com/filecoin-project/lotus/pull/13407))
+- feat(cli): lotus evm deploy prints message CID ([filecoin-project/lotus#13241](https://github.com/filecoin-project/lotus/pull/13241))
+- fix(miner): ensure sender account exists ([filecoin-project/lotus#13348](https://github.com/filecoin-project/lotus/pull/13348))
+- fix(eth): properly return vm error in all gas estimation methods ([filecoin-project/lotus#13389](https://github.com/filecoin-project/lotus/pull/13389))
+- chore: all actor cmd support --actor ([filecoin-project/lotus#13391](https://github.com/filecoin-project/lotus/pull/13391))
+
+## 📝 Changelog
+
+For the set of changes since the last stable release:
+
+- Node: https://github.com/filecoin-project/lotus/compare/release/v1.34.1...release/v1.34.2
+- Miner: https://github.com/filecoin-project/lotus/compare/release/v1.34.1...release/miner/v1.34.2
+
+## 👨‍👩‍👧‍👦 Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| Phi-rjan | 11 | +39018/-254 | 240 |
+| Rod Vagg | 12 | +793/-656 | 45 |
+| dependabot[bot] | 33 | +483/-415 | 69 |
+| Jintu Kumar Das | 1 | +372/-372 | 24 |
+| Adin Schmahmann | 1 | +525/-53 | 6 |
+| Mikers | 1 | +519/-0 | 18 |
+| TippyFlits | 6 | +248/-160 | 22 |
+| Piotr Galar | 3 | +57/-44 | 14 |
+| aceppaluni | 1 | +48/-34 | 3 |
+| Block Wizard | 5 | +37/-36 | 18 |
+| tediou5 | 2 | +58/-6 | 4 |
+| Phi | 2 | +37/-17 | 12 |
+| Luca Moretti | 4 | +24/-24 | 18 |
+| cui | 1 | +22/-25 | 5 |
+| beck | 1 | +13/-22 | 4 |
+| Aryan Tikarya | 1 | +21/-14 | 2 |
+| parthshah1 | 1 | +11/-23 | 3 |
+| 0x5459 | 1 | +28/-4 | 4 |
+| fengyuchuanshen | 1 | +7/-7 | 7 |
+| web3-bot | 4 | +6/-7 | 5 |
+| Steve Loeppky | 1 | +7/-5 | 1 |
+| Snezhkko | 1 | +6/-6 | 5 |
+| Krishang Shah | 1 | +6/-5 | 1 |
+| Lee | 1 | +5/-5 | 1 |
+| stemlaud | 1 | +4/-4 | 4 |
+| asttool | 1 | +4/-4 | 4 |
+| Jakub Sztandera | 1 | +0/-8 | 1 |
+| Hubert | 1 | +4/-3 | 3 |
+| suranmiao | 1 | +2/-2 | 2 |
+| reddaisyy | 1 | +2/-2 | 1 |
+| joemicky | 1 | +2/-2 | 1 |
+| efcking | 1 | +2/-2 | 1 |
+| CertiK | 1 | +2/-1 | 1 |
+| wyrapeseed | 1 | +1/-1 | 1 |
+| letreturn | 1 | +1/-1 | 1 |
+| juejinyuxitu | 1 | +1/-1 | 1 |
+| cargoedit | 1 | +1/-1 | 1 |
+| asamuj | 1 | +1/-1 | 1 |
+| spuradage | 1 | +0/-1 | 1 |
+
 # Node and Miner v1.34.1 / 2025-09-15
 
 This is a non-critical patch release that fixes an issue with the Lotus `v1.34.0` release where the incorrect version of filecoin-ffi was included.  Lotus `v1.34.0` used filecoin-ffi `v1.34.0-dev` when it should have used `v1.34.0`.  This isn’t critical since it’s the same filecoin-ffi version used during the nv27 Calibration network upgrade, but for consistency with other Node implementations like Forest, we are creating this release.  This ensures the inclusion of ref-fvm `v4.7.3` update that was missing in v1.34.0.  All users of v1.34.0 are encouraged to upgrade to v1.34.1.
 
 # Node and Miner v1.34.0 / 2025-09-11
 
-This is a **MANDATORY Lotus v1.34.0 release**, which will deliver the Filecoin network version 27, codenamed “Golden Week” 🏮. This release candidate sets the upgrade epoch for the Mainnet network to **Epoch 5348280:  2025-09-24T23:00:00Z**.  (See the [local time for other timezones](https://www.worldtimebuddy.com/?qm=1&lid=100,5128581,5368361,1816670&h=100&date=2025-9-24&sln=23-24&hf=1&c=1196).)  
+This is a **MANDATORY Lotus v1.34.0 release**, which will deliver the Filecoin network version 27, codenamed “Golden Week” 🏮. This release candidate sets the upgrade epoch for the Mainnet network to **Epoch 5348280:  2025-09-24T23:00:00Z**.  (See the [local time for other timezones](https://www.worldtimebuddy.com/?qm=1&lid=100,5128581,5368361,1816670&h=100&date=2025-9-24&sln=23-24&hf=1&c=1196).)
 
 ## ☢️ Upgrade Warnings ☢️
 - All Lotus node and Storage Provider (SP) operators must upgrade to v1.34.x before the specified date for the Mainnet network.
@@ -36,7 +105,7 @@ This is a **MANDATORY Lotus v1.34.0 release**, which will deliver the Filecoin n
 This release candidate uses [v17.0.0](https://github.com/filecoin-project/builtin-actors/releases/tag/v17.0.0).
 
 ## 🚚 Migration
-All node operators, including storage providers, should be aware that ONE pre-migration is being scheduled 120 epochs before the network upgrade. The migration for the NV24 upgrade is expected to be light with no heavy pre-migrations:
+All node operators, including storage providers, should be aware that ONE pre-migration is being scheduled 120 epochs before the network upgrade. The migration for the NV27 upgrade is expected to be light with no heavy pre-migrations:
 - Pre-Migration is expected to take less then 1 minute.
 - The migration on the upgrade epoch is expected to take less than 30 seconds on a node with a NVMe-drive and a newer CPU. For nodes running on slower disks/CPU, it is still expected to take less then 1 minute.
 - RAM usages is expected to be under 20GiB RAM for both the pre-migration and migration.
@@ -108,16 +177,6 @@ For the set of changes since the last stable release:
 | longhutianjie | 1 | +1/-1 | 1 |
 | Piotr Galar | 1 | +1/-1 | 1 |
 | Phi | 1 | +1/-1 | 1 |
-
-# Node and Miner v1.34.0-rc2 / 2025-09-05
-
-This was the second release candidate of the **upcoming MANDATORY Lotus v1.34.0 release**, which will deliver the Filecoin network version 27, codenamed “Golden Week” 🏮. This release candidate set the upgrade epoch for the calibration network to **Epoch 3007294:  2025-09-10T23:00:00Z**.  
-
-# Node and Miner v1.34.0-rc1 / 2025-09-04
-
-This was the first release candidate for the **upcoming MANDATORY Lotus v1.34.0 release**.  It has been superceded by RC2, which is now required to participate in the nv27 calibration upgrade.
-
-This release candidate uses the outdated [v17.0.0-dev1](https://github.com/filecoin-project/builtin-actors/releases/tag/v17.0.0-dev1).
 
 # Node v1.33.1 / 2025-07-31
 This is the Lotus v1.33.1 release, which introduces performance improvements and operational enhancements. This release focuses on improving F3 subsystem performance, and enhancing CLI tools for better storage provider operations. Notable improvements include up to 6-10x performance gains in F3 power table calculations, ensuring that PreCommit and ProveCommit operations are aggregating to get optimal gas usage after FIP-100, and a enhanced sector management tool with CSV output support. These improvements collectively enhance the stability and efficiency of Lotus operations for both node operators and storage providers.
