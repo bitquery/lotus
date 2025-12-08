@@ -44,7 +44,7 @@ ARG GOFLAGS=""
 RUN make buildall
 
 #####################################
-FROM ubuntu:20.04 AS lotus-base
+FROM ubuntu:22.04 AS lotus-base
 MAINTAINER Lotus Development Team
 
 # Base resources
