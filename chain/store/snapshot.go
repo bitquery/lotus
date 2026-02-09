@@ -28,6 +28,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-f3/certstore"
+	"github.com/filecoin-project/go-f3/manifest"
 	"github.com/filecoin-project/go-state-types/abi"
 
 	bstore "github.com/filecoin-project/lotus/blockstore"
@@ -236,9 +237,21 @@ func (cs *ChainStore) Import(ctx context.Context, f3Ds dtypes.F3DS, r io.Reader)
 				prefix := F3DatastorePrefix()
 				f3DsWrapper := namespace.Wrap(f3Ds, prefix)
 
-				log.Info("Importing F3Data to datastore")
-				if err := certstore.ImportSnapshotToDatastore(ctx, f3r, f3DsWrapper); err != nil {
-					return nil, nil, xerrors.Errorf("failed to import f3Data to datastore: %w", err)
+				var f3Manifest *manifest.Manifest = buildconstants.F3Manifest()
+				if f3Manifest != nil && f3Manifest.InitialPowerTable.Defined() {
+					log.Info("Importing F3Data to datastore")
+					if err := certstore.ImportSnapshotToDatastore(ctx, f3r, f3DsWrapper, f3Manifest); err != nil {
+						return nil, nil, xerrors.Errorf("failed to import f3Data to datastore: %w", err)
+					}
+				} else {
+					if f3Manifest == nil {
+						log.Warnf("Snapshot contains F3 data but F3 manifest is not available in this build. Skipping F3 data import.")
+					} else {
+						log.Warnf("Snapshot contains F3 data but InitialPowerTable in F3 manifest is not available in this build. Skipping F3 data import.")
+					}
+					if _, err := io.Copy(io.Discard, f3Reader); err != nil {
+						return nil, nil, xerrors.Errorf("failed to skip F3 data: %w", err)
+					}
 				}
 			}
 
