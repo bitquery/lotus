@@ -470,7 +470,7 @@ func (pv1 *reverseProxyV1) EthGetFilterLogs(ctx context.Context, id ethtypes.Eth
 	}
 
 	if !ft.hasFilter(id) {
-		return nil, nil
+		return nil, filter.ErrFilterNotFound
 	}
 
 	return pv1.server.EthGetFilterLogs(ctx, id)
@@ -680,6 +680,14 @@ func (pv1 *reverseProxyV1) EthTraceFilter(ctx context.Context, filter ethtypes.E
 		if err := pv1.checkBlkParam(ctx, *filter.FromBlock, 0); err != nil {
 			return nil, err
 		}
+	}
+
+	head, err := pv1.ChainHead(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := pv1.gateway.checkEthTraceFilterBlockRange(head.Height(), filter); err != nil {
+		return nil, err
 	}
 
 	return pv1.server.EthTraceFilter(ctx, filter)

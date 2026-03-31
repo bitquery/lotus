@@ -525,6 +525,11 @@ type Wallet struct {
 
 type FeeConfig struct {
 	DefaultMaxFee types.FIL
+
+	// FIP0115Height sets the epoch at which FIP-0115 base fee calculation activates.
+	// Set to -1 to disable.
+	// WARNING: This is a consensus-breaking change and should only be used for testing.
+	FIP0115Height int64
 }
 
 type FevmConfig struct {
@@ -566,7 +571,7 @@ type EventsConfig struct {
 	MaxFilterResults int
 
 	// MaxFilterHeightRange specifies the maximum range of heights that can be used in a filter (to avoid querying
-	// the entire chain)
+	// the entire chain). Applies to eth_getLogs and trace_filter block range limits.
 	MaxFilterHeightRange uint64
 }
 
