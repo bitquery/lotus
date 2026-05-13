@@ -224,7 +224,20 @@ of filters per connection.`,
 			Name: "MaxFilterResults",
 			Type: "int",
 
-			Comment: `MaxFilterResults specifies the maximum number of results that can be accumulated by an actor event filter.`,
+			Comment: `MaxFilterResults caps the events returned by event filter queries used by the actor
+events API (GetActorEventsRaw, SubscribeActorEventsRaw) and the Ethereum event and
+receipt APIs (eth_getLogs, eth_getFilterLogs, eth_getFilterChanges,
+eth_getBlockReceipts). Set to 0 for no limit.
+
+The cap is a hard limit only when a query's events come from more than one tipset.
+A range whose events all live in a single tipset may exceed MaxFilterResults; queries
+scoped to a single tipset (TipsetCid set, eth_getLogs with a BlockHash,
+eth_getBlockReceipts) bypass it entirely. eth_getTransactionReceipt narrows to a
+single message at the index level and is also unaffected. The cap exists to bound
+the cost of multi-tipset range queries.
+
+Self-hosted nodes serving trusted callers can use 0 or a high value. Public RPC
+operators should keep it bounded.`,
 		},
 		{
 			Name: "MaxFilterHeightRange",
@@ -269,14 +282,6 @@ rewards. This address should have adequate funds to cover gas fees.`,
 			Type: "types.FIL",
 
 			Comment: ``,
-		},
-		{
-			Name: "FIP0115Height",
-			Type: "int64",
-
-			Comment: `FIP0115Height sets the epoch at which FIP-0115 base fee calculation activates.
-Set to -1 to disable.
-WARNING: This is a consensus-breaking change and should only be used for testing.`,
 		},
 	},
 	"FevmConfig": {

@@ -140,8 +140,8 @@ var UpgradeTockFixHeight = abi.ChainEpoch(-1)
 // 2025-09-24T23:00:00Z
 const UpgradeGoldenWeekHeight = abi.ChainEpoch(5348280)
 
-// ????
-var UpgradeXxHeight = abi.ChainEpoch(9999999999)
+// 2026-05-27T:14:00:00Z
+var UpgradeFireHorseHeight = abi.ChainEpoch(6052800)
 
 var UpgradeTeepInitialFilReserved = InitialFilReserved // FIP-0100: no change for mainnet
 
@@ -160,8 +160,8 @@ func init() {
 	}
 	SetAddressNetwork(addrNetwork)
 
-	if os.Getenv("LOTUS_DISABLE_XX") == "1" {
-		UpgradeXxHeight = math.MaxInt64 - 1
+	if os.Getenv("LOTUS_DISABLE_FIREHORSE") == "1" {
+		UpgradeFireHorseHeight = math.MaxInt64 - 1
 	}
 
 	// NOTE: DO NOT change this unless you REALLY know what you're doing. This is not consensus critical, however,

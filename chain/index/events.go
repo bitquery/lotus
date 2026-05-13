@@ -161,13 +161,13 @@ func loadExecutedMessages(ctx context.Context, cs ChainStore, recomputeTipSetSta
 	st := cs.ActorStore(ctx)
 
 	var recomputed bool
-	recompute := func() error {
+	recompute := func(loadErr error) error {
 		tskCid, err2 := rctTs.Key().Cid()
 		if err2 != nil {
 			return xerrors.Errorf("failed to compute tipset key cid: %w", err2)
 		}
 
-		log.Warnf("failed to load receipts for tipset %s (height %d): %s; recomputing tipset state", tskCid.String(), rctTs.Height(), err.Error())
+		log.Warnf("failed to load receipts for tipset %s (height %d): %s; recomputing tipset state", tskCid.String(), rctTs.Height(), loadErr.Error())
 		if err := recomputeTipSetStateFunc(ctx, msgTs); err != nil {
 			return xerrors.Errorf("failed to recompute tipset state: %w", err)
 		}
@@ -181,7 +181,7 @@ func loadExecutedMessages(ctx context.Context, cs ChainStore, recomputeTipSetSta
 			return nil, xerrors.Errorf("failed to load message receipts: %w", err)
 		}
 
-		if err := recompute(); err != nil {
+		if err := recompute(err); err != nil {
 			return nil, err
 		}
 		recomputed = true
@@ -219,7 +219,7 @@ func loadExecutedMessages(ctx context.Context, cs ChainStore, recomputeTipSetSta
 				return nil, xerrors.Errorf("failed to load events root for message %s: err: %w", ems[i].msg.Cid(), err)
 			}
 			// we may have the receipts but not the events, IsStoringEvents may have been false
-			if err := recompute(); err != nil {
+			if err := recompute(err); err != nil {
 				return nil, err
 			}
 			eventsArr, err = amt4.LoadAMT(ctx, st, *rct.EventsRoot, amt4.UseTreeBitWidth(types.EventAMTBitwidth))
@@ -398,8 +398,13 @@ func (si *SqliteIndexer) getTipsetKeyCidByHeight(ctx context.Context, height abi
 // GetEventsForFilter returns matching events for the given filter
 // Returns nil, nil if the filter has no matching events
 // Returns nil, ErrNotFound if the filter has no matching events and the tipset is not indexed
+// Returns nil, ErrBackfillRequired if the index is in degraded mode and requires a backfill
 // Returns nil, err for all other errors
 func (si *SqliteIndexer) GetEventsForFilter(ctx context.Context, f *EventFilter) ([]*CollectedEvent, error) {
+	if si.needsBackfill {
+		return nil, ErrBackfillRequired
+	}
+
 	getEventsFnc := func(stmt *sql.Stmt, values []any) ([]*CollectedEvent, error) {
 		q, err := stmt.QueryContext(ctx, values...)
 		if err != nil {
@@ -409,29 +414,47 @@ func (si *SqliteIndexer) GetEventsForFilter(ctx context.Context, f *EventFilter)
 
 		var ces []*CollectedEvent
 		var currentID int64 = -1
+		var lastHeight abi.ChainEpoch = -1
+		var tipsetsSeen int
 		var ce *CollectedEvent
+
+		// Rows are sorted by (height, message_index, event_index), so consecutive events
+		// usually share tipset_key_cid and message_cid; cache the last seen to skip work.
+		var lastTsKeyCid cid.Cid
+		var lastTsKey types.TipSetKey
+		var lastMsgCid cid.Cid
+
+		// Memoize emitter address; the flag handles invalidation when the source path
+		// switches between ID actor and delegated bytes.
+		var (
+			lastEmitterAddr      address.Address // address.Undef until first set
+			lastEmitterIsID      bool            // true if last was derived from emitterID
+			lastEmitterID        uint64          // valid when lastEmitterIsID
+			lastEmitterAddrBytes string          // valid when !lastEmitterIsID && set
+		)
+
+		// Reused across rows; declaring inside the loop allocates fresh slots each iteration.
+		var row struct {
+			id           int64
+			height       uint64
+			tipsetKeyCid []byte
+			emitterID    uint64
+			emitterAddr  []byte
+			eventIndex   int
+			messageCid   []byte
+			messageIndex int
+			reverted     bool
+			flags        []byte
+			key          string
+			codec        uint64
+			value        []byte
+		}
 
 		for q.Next() {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			default:
-			}
-
-			var row struct {
-				id           int64
-				height       uint64
-				tipsetKeyCid []byte
-				emitterID    uint64
-				emitterAddr  []byte
-				eventIndex   int
-				messageCid   []byte
-				messageIndex int
-				reverted     bool
-				flags        []byte
-				key          string
-				codec        uint64
-				value        []byte
 			}
 
 			if err := q.Scan(
@@ -452,56 +475,74 @@ func (si *SqliteIndexer) GetEventsForFilter(ctx context.Context, f *EventFilter)
 				return nil, xerrors.Errorf("read prefill row: %w", err)
 			}
 
-			// The query will return all entries for all matching events, so we need to keep track
-			// of which event we are dealing with and create a new one each time we see a new id
+			// The query returns all entries for all matching events; create a new CollectedEvent each time we see a new id.
 			if row.id != currentID {
-				// Unfortunately we can't easily incorporate the max results limit into the query due to the
-				// unpredictable number of rows caused by joins
-				// Error here to inform the caller that we've hit the max results limit
-				if f.MaxResults > 0 && len(ces) >= f.MaxResults {
-					return nil, ErrMaxResultsReached
+				rowHeight := abi.ChainEpoch(row.height)
+				if rowHeight != lastHeight {
+					tipsetsSeen++
+					lastHeight = rowHeight
 				}
 
 				currentID = row.id
 				ce = &CollectedEvent{
 					EventIdx: row.eventIndex,
 					Reverted: row.reverted,
-					Height:   abi.ChainEpoch(row.height),
+					Height:   rowHeight,
 					MsgIdx:   row.messageIndex,
 				}
 				ces = append(ces, ce)
 
+				// MaxResults applies as a hard cap only once events span more than one tipset;
+				// a single contributing tipset may exceed the cap. Single-tipset and
+				// single-message queries naturally bypass this because tipsetsSeen stays at 1.
+				if f.MaxResults > 0 && tipsetsSeen > 1 && len(ces) > f.MaxResults {
+					return nil, ErrMaxResultsReached
+				}
+
 				if row.emitterAddr == nil {
-					ce.EmitterAddr, err = address.NewIDAddress(row.emitterID)
-					if err != nil {
-						return nil, xerrors.Errorf("failed to parse emitter id: %w", err)
+					if !lastEmitterIsID || row.emitterID != lastEmitterID || lastEmitterAddr == address.Undef {
+						lastEmitterAddr, err = address.NewIDAddress(row.emitterID)
+						if err != nil {
+							return nil, xerrors.Errorf("failed to parse emitter id: %w", err)
+						}
+						lastEmitterIsID = true
+						lastEmitterID = row.emitterID
 					}
 				} else {
-					ce.EmitterAddr, err = address.NewFromBytes(row.emitterAddr)
-					if err != nil {
-						return nil, xerrors.Errorf("parse emitter addr: %w", err)
+					if lastEmitterIsID || string(row.emitterAddr) != lastEmitterAddrBytes || lastEmitterAddr == address.Undef {
+						lastEmitterAddr, err = address.NewFromBytes(row.emitterAddr)
+						if err != nil {
+							return nil, xerrors.Errorf("parse emitter addr: %w", err)
+						}
+						lastEmitterIsID = false
+						lastEmitterAddrBytes = string(row.emitterAddr)
 					}
 				}
+				ce.EmitterAddr = lastEmitterAddr
 
-				tsKeyCid, err := cid.Cast(row.tipsetKeyCid)
-				if err != nil {
-					return nil, xerrors.Errorf("parse tipsetkey cid: %w", err)
+				if string(row.tipsetKeyCid) != lastTsKeyCid.KeyString() {
+					lastTsKeyCid, err = cid.Cast(row.tipsetKeyCid)
+					if err != nil {
+						return nil, xerrors.Errorf("parse tipsetkey cid: %w", err)
+					}
+					ts, err := si.cs.GetTipSetByCid(ctx, lastTsKeyCid)
+					if err != nil {
+						return nil, xerrors.Errorf("get tipset by cid: %w", err)
+					}
+					if ts == nil {
+						return nil, xerrors.Errorf("failed to get tipset from cid: tipset is nil for cid: %s", lastTsKeyCid)
+					}
+					lastTsKey = ts.Key()
 				}
+				ce.TipSetKey = lastTsKey
 
-				ts, err := si.cs.GetTipSetByCid(ctx, tsKeyCid)
-				if err != nil {
-					return nil, xerrors.Errorf("get tipset by cid: %w", err)
+				if string(row.messageCid) != lastMsgCid.KeyString() {
+					lastMsgCid, err = cid.Cast(row.messageCid)
+					if err != nil {
+						return nil, xerrors.Errorf("parse message cid: %w", err)
+					}
 				}
-				if ts == nil {
-					return nil, xerrors.Errorf("failed to get tipset from cid: tipset is nil for cid: %s", tsKeyCid)
-				}
-
-				ce.TipSetKey = ts.Key()
-
-				ce.MsgCid, err = cid.Cast(row.messageCid)
-				if err != nil {
-					return nil, xerrors.Errorf("parse message cid: %w", err)
-				}
+				ce.MsgCid = lastMsgCid
 			}
 
 			ce.Entries = append(ce.Entries, types.EventEntry{
@@ -607,6 +648,11 @@ func makePrefillFilterQuery(f *EventFilter) ([]any, string, error) {
 		// unless asking for a specific tipset, we never want to see reverted historical events
 		clauses = append(clauses, "e.reverted=?")
 		values = append(values, false)
+	}
+
+	if f.MsgCid != cid.Undef {
+		clauses = append(clauses, "tm.message_cid=?")
+		values = append(values, f.MsgCid.Bytes())
 	}
 
 	if len(f.Addresses) > 0 {

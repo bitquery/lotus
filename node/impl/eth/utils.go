@@ -193,7 +193,6 @@ func parseEthTopics(topics ethtypes.EthTopicSpec) (map[string][][]byte, error) {
 		// Ethereum topics are emitted using `LOG{0..4}` opcodes resulting in topics1..4
 		key := fmt.Sprintf("t%d", idx+1)
 		for _, v := range vals {
-			v := v // copy the ethhash to avoid repeatedly referencing the same one.
 			keys[key] = append(keys[key], v[:])
 		}
 	}
@@ -446,7 +445,7 @@ func newEthTx(
 	return tx, nil
 }
 
-func newEthTxReceipt(ctx context.Context, tx ethtypes.EthTx, baseFee big.Int, msgReceipt types.MessageReceipt, ev EthEventsInternal) (ethtypes.EthTxReceipt, error) {
+func newEthTxReceipt(ctx context.Context, tx ethtypes.EthTx, msgCid cid.Cid, baseFee big.Int, msgReceipt types.MessageReceipt, ev EthEventsInternal) (ethtypes.EthTxReceipt, error) {
 	var (
 		transactionIndex ethtypes.EthUint64
 		blockHash        ethtypes.EthHash
@@ -516,7 +515,7 @@ func newEthTxReceipt(ctx context.Context, tx ethtypes.EthTx, baseFee big.Int, ms
 	}
 
 	if rct := msgReceipt; rct.EventsRoot != nil {
-		logs, err := ev.GetEthLogsForBlockAndTransaction(ctx, &blockHash, tx.Hash)
+		logs, err := ev.GetEthLogsForBlockAndTransaction(ctx, &blockHash, msgCid)
 		if err != nil {
 			return ethtypes.EthTxReceipt{}, xerrors.Errorf("failed to get eth logs for block and transaction: %w", err)
 		}
