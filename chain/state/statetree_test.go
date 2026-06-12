@@ -1,14 +1,18 @@
 package state
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
 
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/stretchr/testify/require"
+	cbg "github.com/whyrusleeping/cbor-gen"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/network"
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 
@@ -408,5 +412,123 @@ func TestStateTreeConsistency(t *testing.T) {
 	fmt.Println("root is: ", root)
 	if root.String() != "bafy2bzaceb2bhqw75pqp44efoxvlnm73lnctq6djair56bfn5x3gw56epcxbi" {
 		t.Fatal("MISMATCH!")
+	}
+}
+
+// referenceFullScanDiff replicates the exhaustive full-scan semantics of Diff
+// (iterate every actor in newTree, look it up in oldTree, emit it valued by its
+// new state if added or modified). It is the oracle the fast path must match.
+func referenceFullScanDiff(t *testing.T, oldTree, newTree *StateTree) map[string]types.Actor {
+	out := map[string]types.Actor{}
+	var ncval, ocval cbg.Deferred
+	buf := bytes.NewReader(nil)
+	err := newTree.root.ForEach(&ncval, func(k string) error {
+		addr, err := address.NewFromBytes([]byte(k))
+		require.NoError(t, err)
+
+		found, err := oldTree.root.Get(abi.AddrKey(addr), &ocval)
+		require.NoError(t, err)
+		if found && bytes.Equal(ocval.Raw, ncval.Raw) {
+			return nil
+		}
+
+		var act types.Actor
+		buf.Reset(ncval.Raw)
+		require.NoError(t, act.UnmarshalCBOR(buf))
+		buf.Reset(nil)
+		out[addr.String()] = act
+		return nil
+	})
+	require.NoError(t, err)
+	return out
+}
+
+// TestDiffFastPathMatchesFullScan verifies that the hamt.Diff-based fast path in
+// Diff returns exactly the same data as the exhaustive full scan, across adds,
+// modifications, deletions, and unchanged actors.
+func TestDiffFastPathMatchesFullScan(t *testing.T) {
+	ctx := context.Background()
+	cst := cbor.NewMemCborStore()
+
+	mkAddr := func(i uint64) address.Address {
+		a, err := address.NewIDAddress(i)
+		require.NoError(t, err)
+		return a
+	}
+
+	// Build an old version-5 state tree with enough actors to span multiple HAMT
+	// levels, so structural sharing is actually exercised.
+	oldSt, err := NewStateTree(cst, types.StateTreeVersion5)
+	require.NoError(t, err)
+
+	const n = 4000
+	for i := uint64(1); i <= n; i++ {
+		require.NoError(t, oldSt.SetActor(mkAddr(i), &types.Actor{
+			Code:    builtin2.AccountActorCodeID,
+			Head:    builtin2.AccountActorCodeID,
+			Nonce:   i,
+			Balance: types.NewInt(1000 + i),
+		}))
+	}
+	oldRoot, err := oldSt.Flush(ctx)
+	require.NoError(t, err)
+
+	// Derive a new tree: modify a few, add a few, delete a few.
+	newSt, err := LoadStateTree(cst, oldRoot)
+	require.NoError(t, err)
+
+	modified := []uint64{1, 50, 999, 2500, n}
+	for _, i := range modified {
+		require.NoError(t, newSt.SetActor(mkAddr(i), &types.Actor{
+			Code:    builtin2.AccountActorCodeID,
+			Head:    builtin2.AccountActorCodeID,
+			Nonce:   i + 100000,
+			Balance: types.NewInt(7777),
+		}))
+	}
+	added := []uint64{n + 1, n + 2, n + 3, n + 7, n + 9}
+	for _, i := range added {
+		require.NoError(t, newSt.SetActor(mkAddr(i), &types.Actor{
+			Code:    builtin2.AccountActorCodeID,
+			Head:    builtin2.AccountActorCodeID,
+			Nonce:   i,
+			Balance: types.NewInt(42),
+		}))
+	}
+	deleted := []uint64{2, 3, 1234}
+	for _, i := range deleted {
+		require.NoError(t, newSt.DeleteActor(mkAddr(i)))
+	}
+	newRoot, err := newSt.Flush(ctx)
+	require.NoError(t, err)
+
+	oldLoaded, err := LoadStateTree(cst, oldRoot)
+	require.NoError(t, err)
+	newLoaded, err := LoadStateTree(cst, newRoot)
+	require.NoError(t, err)
+	require.Equal(t, types.StateTreeVersion5, newLoaded.version)
+
+	reference := referenceFullScanDiff(t, oldLoaded, newLoaded)
+
+	// The fast path in isolation must equal the oracle.
+	fast, err := diffActorTreeFast(ctx, oldLoaded, newLoaded)
+	require.NoError(t, err)
+	require.Equal(t, reference, fast)
+
+	// The public Diff (which now routes v5 trees through the fast path) too.
+	got, err := Diff(ctx, oldLoaded, newLoaded)
+	require.NoError(t, err)
+	require.Equal(t, reference, got)
+
+	// Spot-check the contract: adds + modifications present, deletions absent.
+	require.Len(t, fast, len(modified)+len(added))
+	for _, i := range modified {
+		require.Contains(t, fast, mkAddr(i).String())
+	}
+	for _, i := range added {
+		require.Contains(t, fast, mkAddr(i).String())
+	}
+	for _, i := range deleted {
+		require.NotContains(t, fast, mkAddr(i).String())
 	}
 }

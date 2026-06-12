@@ -3,6 +3,7 @@ package state
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 
@@ -14,6 +15,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	hamt "github.com/filecoin-project/go-hamt-ipld/v3"
 	"github.com/filecoin-project/go-state-types/abi"
 	builtin_types "github.com/filecoin-project/go-state-types/builtin"
 	"github.com/filecoin-project/go-state-types/network"
@@ -605,6 +607,25 @@ func (st *StateTree) Version() types.StateTreeVersion {
 }
 
 func Diff(ctx context.Context, oldTree, newTree *StateTree) (map[string]types.Actor, error) {
+	// Fast path: when both trees are version 5 (the builtin-actors state tree
+	// used on mainnet today), diff the underlying actor HAMTs directly. hamt.Diff
+	// exploits structural sharing — subtrees with identical CIDs are skipped — so
+	// its cost scales with the number of changed actors rather than the total size
+	// of the state tree. The exhaustive walk below visits every actor on every
+	// call, which on mainnet is millions of HAMT lookups (~20+ minutes per call).
+	//
+	// The fast path is restricted to version 5 because that is the only version
+	// whose HAMT parameters (bitwidth + hash) are known here; any other version,
+	// or any unexpected failure, falls back to the exhaustive walk so the returned
+	// data is never affected.
+	if oldTree.version == types.StateTreeVersion5 && newTree.version == types.StateTreeVersion5 {
+		out, err := diffActorTreeFast(ctx, oldTree, newTree)
+		if err == nil {
+			return out, nil
+		}
+		log.Warnf("fast actor-tree diff failed, falling back to full scan: %s", err)
+	}
+
 	out := map[string]types.Actor{}
 
 	var (
@@ -662,5 +683,66 @@ func Diff(ctx context.Context, oldTree, newTree *StateTree) (map[string]types.Ac
 	}); err != nil {
 		return nil, err
 	}
+	return out, nil
+}
+
+// diffActorTreeFast diffs two version-5 actor HAMTs using hamt.Diff, which only
+// descends into subtrees whose CIDs differ. It returns the same data as the
+// exhaustive walk in Diff: the set of actors present in newTree whose state
+// differs from oldTree (additions and modifications, valued by their new state).
+// Actors removed in newTree are intentionally omitted, matching Diff's behaviour.
+func diffActorTreeFast(ctx context.Context, oldTree, newTree *StateTree) (map[string]types.Actor, error) {
+	oldRoot, err := oldTree.root.Root()
+	if err != nil {
+		return nil, xerrors.Errorf("getting old actors root: %w", err)
+	}
+	newRoot, err := newTree.root.Root()
+	if err != nil {
+		return nil, xerrors.Errorf("getting new actors root: %w", err)
+	}
+
+	// These options MUST match how the builtin-actors state tree HAMT is built
+	// (see go-state-types builtin.DefaultHamtBitwidth and adt.DefaultHamtOptions);
+	// the bitwidth in particular is not stored in the node, so an incorrect value
+	// would misinterpret the node structure rather than error.
+	opts := []hamt.Option{
+		hamt.UseTreeBitWidth(builtin_types.DefaultHamtBitwidth),
+		hamt.UseHashFunction(func(input []byte) []byte {
+			res := sha256.Sum256(input)
+			return res[:]
+		}),
+	}
+
+	changes, err := hamt.Diff(ctx, oldTree.Store, newTree.Store, oldRoot, newRoot, opts...)
+	if err != nil {
+		return nil, xerrors.Errorf("diffing actor HAMTs: %w", err)
+	}
+
+	out := make(map[string]types.Actor, len(changes))
+	buf := bytes.NewReader(nil)
+	for _, change := range changes {
+		// Removed actors are not reported by Diff; skip them to preserve behaviour.
+		if change.Type == hamt.Remove {
+			continue
+		}
+
+		addr, err := address.NewFromBytes([]byte(change.Key))
+		if err != nil {
+			return nil, xerrors.Errorf("address in state tree was not valid: %w", err)
+		}
+
+		// version 5 always decodes to the current types.Actor (cf. Diff, which
+		// only uses ActorV4 for versions <= StateTreeVersion4).
+		var act types.Actor
+		buf.Reset(change.After.Raw)
+		err = act.UnmarshalCBOR(buf)
+		buf.Reset(nil)
+		if err != nil {
+			return nil, err
+		}
+
+		out[addr.String()] = act
+	}
+
 	return out, nil
 }
