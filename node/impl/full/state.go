@@ -47,6 +47,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+
+	cboripld "github.com/ipfs/go-ipld-cbor"
 )
 
 type StateModuleAPI interface {
