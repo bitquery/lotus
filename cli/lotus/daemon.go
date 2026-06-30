@@ -15,6 +15,9 @@ import (
 	"strings"
 
 	"github.com/cheggaaa/pb/v3"
+	"github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/namespace"
+	"github.com/ipfs/go-datastore/query"
 	metricsprom "github.com/ipfs/go-metrics-prometheus"
 	"github.com/klauspost/compress/zstd"
 	"github.com/mitchellh/go-homedir"
@@ -424,6 +427,12 @@ var DaemonCmd = &cli.Command{
 					if err != nil {
 						return err
 					}
+					configured, err := configuredAPIListenAddress(lr)
+					if err != nil {
+						log.Warnw("could not read configured API listen address before applying --api override", "error", err)
+					} else if warning := apiFlagOverrideWarning(configured, apima); warning != "" {
+						log.Warn(warning)
+					}
 					return lr.SetAPIEndpoint(apima)
 				})),
 			node.ApplyIf(func(s *node.Settings) bool { return !cctx.Bool("bootstrap") },
@@ -497,6 +506,28 @@ func readGenesis(path string) ([]byte, error) {
 		return build.DecompressAsZstd(genesisFile)
 	}
 	return io.ReadAll(genesisFile)
+}
+
+func configuredAPIListenAddress(lr repo.LockedRepo) (string, error) {
+	c, err := lr.Config()
+	if err != nil {
+		return "", err
+	}
+	cfg, ok := c.(*config.FullNode)
+	if !ok {
+		return "", xerrors.Errorf("invalid config for repo, got: %T", c)
+	}
+	return cfg.Common.API.ListenAddress, nil
+}
+
+func apiFlagOverrideWarning(configured string, override multiaddr.Multiaddr) string {
+	if configured == "" || override == nil {
+		return ""
+	}
+	if configured == override.String() {
+		return ""
+	}
+	return fmt.Sprintf("--api overrides configured API listen address %q (API.ListenAddress / LOTUS_API_LISTENADDRESS); using %q", configured, override.String())
 }
 
 func importKey(ctx context.Context, api lapi.FullNode, f string) error {
@@ -696,8 +727,12 @@ func removeExistingChain(cctx *cli.Context, lr repo.Repo) error {
 	if err != nil {
 		return xerrors.Errorf("error locking repo: %w", err)
 	}
+	lockedRepoClosed := false
 	// Ensure that lockedRepo is closed when this function exits
 	defer func() {
+		if lockedRepoClosed {
+			return
+		}
 		if closeErr := lockedRepo.Close(); closeErr != nil {
 			log.Errorf("Error closing the lockedRepo: %v", closeErr)
 		}
@@ -722,8 +757,68 @@ func removeExistingChain(cctx *cli.Context, lr repo.Repo) error {
 		return xerrors.Errorf("error removing chain directory: %w", err)
 	}
 
-	log.Info("chain and splitstore data have been removed")
+	if err := deleteLegacyF3Datastore(cctx, lockedRepo); err != nil {
+		return xerrors.Errorf("error removing legacy F3 datastore entries: %w", err)
+	}
+
+	if err := lockedRepo.Close(); err != nil {
+		return xerrors.Errorf("error closing repo before removing F3 files: %w", err)
+	}
+	lockedRepoClosed = true
+
+	f3DatastorePath := filepath.Join(repoPath, "datastore", "f3")
+	log.Info("removing F3 datastore directory:", f3DatastorePath)
+
+	err = os.RemoveAll(f3DatastorePath)
+	if err != nil {
+		return xerrors.Errorf("error removing F3 datastore directory: %w", err)
+	}
+
+	f3Path := filepath.Join(repoPath, "f3")
+	log.Info("removing F3 directory:", f3Path)
+
+	err = os.RemoveAll(f3Path)
+	if err != nil {
+		return xerrors.Errorf("error removing F3 directory: %w", err)
+	}
+
+	log.Info("chain, splitstore, and F3 data have been removed")
 	return nil
+}
+
+func deleteLegacyF3Datastore(cctx *cli.Context, lockedRepo repo.LockedRepo) error {
+	ctx := context.Background()
+	if cctx != nil {
+		ctx = lcli.ReqContext(cctx)
+	}
+
+	mds, err := lockedRepo.Datastore(ctx, "/metadata")
+	if err != nil {
+		return err
+	}
+
+	f3LegacyDs := namespace.Wrap(mds, datastore.NewKey("/f3"))
+	qr, err := f3LegacyDs.Query(ctx, query.Query{KeysOnly: true})
+	if err != nil {
+		return err
+	}
+	defer qr.Close() //nolint:errcheck
+
+	batch, err := f3LegacyDs.Batch(ctx)
+	if err != nil {
+		return err
+	}
+
+	for res, ok := qr.NextSync(); ok; res, ok = qr.NextSync() {
+		if res.Error != nil {
+			return res.Error
+		}
+		if err := batch.Delete(ctx, datastore.NewKey(res.Key)); err != nil {
+			return err
+		}
+	}
+
+	return batch.Commit(ctx)
 }
 
 func deleteSplitstoreDir(lr repo.LockedRepo) error {

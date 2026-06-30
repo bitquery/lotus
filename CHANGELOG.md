@@ -17,6 +17,139 @@
 
 ## 👌 Improvements
 
+# Node and Miner v1.36.1 / 2026-06-30
+
+This is the stable release of Lotus Node and Miner v1.36.1, a recommended patch release focused on Ethereum RPC correctness, gateway API alignment, and release/build reliability.
+
+## ☢️ Upgrade Warnings ☢️
+
+- There are no upgrade warnings for this release.
+
+## ⭐ New Features
+
+- feat(eth): add `eth_baseFee` JSON-RPC method returning the base fee for the next block, matching geth behavior via `ComputeBaseFee` on the current tipset ([filecoin-project/lotus#13615](https://github.com/filecoin-project/lotus/pull/13615))
+
+## 🐛 Bug Fixes
+
+- fix(rpc): `GasEstimateMessageGas` no longer panics when estimating messages with an empty `To` or `From` address ([filecoin-project/lotus#13672](https://github.com/filecoin-project/lotus/pull/13672))
+- fix(api): trace transaction api returns the correct error ([filecoin-project/lotus#13614](https://github.com/filecoin-project/lotus/pull/13614))
+- fix(cli): warn when `lotus daemon --api` overrides the configured `API.ListenAddress` / `LOTUS_API_LISTENADDRESS`, making the selected API endpoint visible to operators ([filecoin-project/lotus#13670](https://github.com/filecoin-project/lotus/pull/13670))
+- fix(cli): RPC API URLs ending with a trailing slash no longer produce duplicate slashes before `/rpc/<version>` ([filecoin-project/lotus#13662](https://github.com/filecoin-project/lotus/pull/13662))
+- Fix off-by-one in `transactionPosition` returned by `trace_block`, `trace_filter` and `trace_transaction`. Positions were 1-indexed; per the Ethereum trace API spec they are 0-indexed and must match the corresponding `transactionIndex` from `eth_getBlockByNumber`. ([filecoin-project/lotus#13610](https://github.com/filecoin-project/lotus/pull/13610))
+- fix(eth): `eth_getTransactionReceipt` no longer fails when another transaction in the same block emits a large number of events. `MaxFilterResults` now caps only multi-tipset event queries; single-block calls (`eth_getLogs` with `BlockHash`, `eth_getBlockReceipts`, `eth_getTransactionReceipt`) bypass it. Public RPC operators should apply rate and response-size limits at the proxy layer for these calls; a single response can be large when a block contains log-heavy transactions ([filecoin-project/lotus#13617](https://github.com/filecoin-project/lotus/pull/13617))
+- fix(eth): return indexed block-level `logsBloom` for `eth_getBlockByHash`, `eth_getBlockByNumber`, and new-head subscription payloads when chain-index bloom data is available; existing tipsets without bloom rows continue to fall back to the previous full bloom. This adds a chain index DB migration for the `tipset_bloom` table and requires no RPC-provider config changes. ([filecoin-project/lotus#13618](https://github.com/filecoin-project/lotus/pull/13618))
+- fix(gateway): align v2 RPC surface (`/rpc/v2`) with v1; remove `*Limited` and `*Untrusted` eth method variants ([filecoin-project/lotus#13628](https://github.com/filecoin-project/lotus/pull/13628))
+- fix(eth): `eth_call`, `eth_estimateGas` and `StateCall` are no longer refused at the epoch immediately after an expensive network-upgrade migration; that block's migrated state is already available, so only the upgrade epoch itself is refused. This unblocks indexers that replay `eth_call` at the block of each event. The refusal now returns a typed error with the registered JSON-RPC code `-32002` and a recognisable message, instead of the generic application code `1` ([filecoin-project/lotus#13644](https://github.com/filecoin-project/lotus/pull/13644))
+- fix: update Filecoin FFI to v1.36.1 ([filecoin-project/lotus#13663](https://github.com/filecoin-project/lotus/pull/13663))
+- fix(build): ffi-version-check now depends on the module update ([filecoin-project/lotus#13658](https://github.com/filecoin-project/lotus/pull/13658))
+- fix: docker builds Lotus on bullseye again ([filecoin-project/lotus#13611](https://github.com/filecoin-project/lotus/pull/13611))
+- fix: remove F3 data with existing chain cleanup ([filecoin-project/lotus#13609](https://github.com/filecoin-project/lotus/pull/13609))
+
+## 👌 Improvements
+
+- Silence libp2p config log spam ([filecoin-project/lotus#13612](https://github.com/filecoin-project/lotus/pull/13612))
+- feat(mempool): raise the default per-actor cap on the untrusted push path (`MaxUntrustedActorPendingMessages`) from 10 to 100, reducing spurious `ErrTooManyPendingMessages` rejections for normal-cadence senders relaying through `lotus-gateway` / public RPC ([filecoin-project/lotus#13636](https://github.com/filecoin-project/lotus/pull/13636))
+- chore(cli): `lotus-miner info` supports `--actor` to query any miner without a local miner repo; miner-daemon-only sections are skipped when `--actor` is set ([filecoin-project/lotus#13641](https://github.com/filecoin-project/lotus/pull/13641))
+- chore: remove obsolete network-version guards across CLI, state-manager, storage, and miner code. ([filecoin-project/lotus#13680](https://github.com/filecoin-project/lotus/pull/13680))
+- feat: update `mainnet.pi` to remove the Venus bootstrap peer ([filecoin-project/lotus#13648](https://github.com/filecoin-project/lotus/pull/13648))
+
+## 📝 Changelog
+
+For the full set of changes since the last stable release:
+
+- Node and Miner: https://github.com/filecoin-project/lotus/compare/release/v1.36.0...release/v1.36.1
+
+### Changes since RC1
+
+- fix(cli): warn when `lotus daemon --api` overrides the configured API listen address ([filecoin-project/lotus#13670](https://github.com/filecoin-project/lotus/pull/13670))
+- chore: bump go-state-types to v0.19.0-rc1 ([filecoin-project/lotus#13671](https://github.com/filecoin-project/lotus/pull/13671))
+- fix(rpc): harden `GasEstimateMessageGas` handling for messages with empty `To` or `From` addresses ([filecoin-project/lotus#13672](https://github.com/filecoin-project/lotus/pull/13672))
+- chore: remove obsolete network-version guards across CLI, state-manager, storage, and miner code ([filecoin-project/lotus#13680](https://github.com/filecoin-project/lotus/pull/13680))
+
+## 👨‍👩‍👧‍👦 Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| Phi-rjan | 27 | +40025/-1056 | 266 |
+| Rod Vagg | 6 | +1685/-1777 | 34 |
+| William Morriss | 2 | +976/-582 | 29 |
+| dependabot[bot] | 19 | +145/-730 | 35 |
+| ZenGround0 | 1 | +171/-366 | 17 |
+| Shriraj Pawar | 1 | +368/-105 | 14 |
+| Andrew Jackson (Ajax) | 2 | +290/-90 | 18 |
+| Piotr Galar | 3 | +223/-78 | 14 |
+| beck | 3 | +93/-59 | 9 |
+| Phi | 4 | +34/-34 | 14 |
+| Linghao | 1 | +58/-0 | 3 |
+| chuanshanjida | 1 | +6/-6 | 6 |
+| Łukasz Magiera | 1 | +5/-5 | 1 |
+| Steve Loeppky | 1 | +7/-3 | 1 |
+| Jakub Sztandera | 2 | +3/-3 | 2 |
+| caltechustc | 1 | +2/-1 | 1 |
+| Aryan Tikarya | 1 | +2/-1 | 2 |
+| Jimmy Zhang | 1 | +0/-1 | 1 |
+
+# Node and Miner v1.36.1-rc1 / 2026-06-17
+
+This is the first release candidate for Lotus Node and Miner v1.36.1, a recommended patch release focused on Ethereum RPC correctness, gateway API alignment, and release/build reliability.
+
+## ☢️ Upgrade Warnings ☢️
+
+- There are no upgrade warnings for this release candidate.
+
+## ⭐ New Features
+
+- feat(eth): add `eth_baseFee` JSON-RPC method returning the base fee for the next block, matching geth behavior via `ComputeBaseFee` on the current tipset ([filecoin-project/lotus#13615](https://github.com/filecoin-project/lotus/pull/13615))
+
+## 🐛 Bug Fixes
+- fix(rpc): `GasEstimateMessageGas` with an empty `To` or `From` address ([filecoin-project/lotus#13672](https://github.com/filecoin-project/lotus/pull/13672))
+- fix(api): trace transaction api returns the correct error ([filecoin-project/lotus#13614](https://github.com/filecoin-project/lotus/pull/13614))
+- fix(cli): warn when `lotus daemon --api` overrides the configured `API.ListenAddress` / `LOTUS_API_LISTENADDRESS`, making the selected API endpoint visible to operators ([filecoin-project/lotus#13670](https://github.com/filecoin-project/lotus/pull/13670))
+- fix(cli): RPC API URLs ending with a trailing slash no longer produce duplicate slashes before `/rpc/<version>` ([filecoin-project/lotus#13662](https://github.com/filecoin-project/lotus/pull/13662))
+- Fix off-by-one in `transactionPosition` returned by `trace_block`, `trace_filter` and `trace_transaction`. Positions were 1-indexed; per the Ethereum trace API spec they are 0-indexed and must match the corresponding `transactionIndex` from `eth_getBlockByNumber`. ([filecoin-project/lotus#13610](https://github.com/filecoin-project/lotus/pull/13610))
+- fix(eth): `eth_getTransactionReceipt` no longer fails when another transaction in the same block emits a large number of events. `MaxFilterResults` now caps only multi-tipset event queries; single-block calls (`eth_getLogs` with `BlockHash`, `eth_getBlockReceipts`, `eth_getTransactionReceipt`) bypass it. Public RPC operators should apply rate and response-size limits at the proxy layer for these calls; a single response can be large when a block contains log-heavy transactions ([filecoin-project/lotus#13617](https://github.com/filecoin-project/lotus/pull/13617))
+- fix(eth): return indexed block-level `logsBloom` for `eth_getBlockByHash`, `eth_getBlockByNumber`, and new-head subscription payloads when chain-index bloom data is available; existing tipsets without bloom rows continue to fall back to the previous full bloom. This adds a chain index DB migration for the `tipset_bloom` table and requires no RPC-provider config changes. ([filecoin-project/lotus#13618](https://github.com/filecoin-project/lotus/pull/13618))
+- fix(gateway): align v2 RPC surface (`/rpc/v2`) with v1; remove `*Limited` and `*Untrusted` eth method variants ([filecoin-project/lotus#13628](https://github.com/filecoin-project/lotus/pull/13628))
+- fix(eth): `eth_call`, `eth_estimateGas` and `StateCall` are no longer refused at the epoch immediately after an expensive network-upgrade migration; that block's migrated state is already available, so only the upgrade epoch itself is refused. This unblocks indexers (e.g. The Graph) that replay `eth_call` at the block of each event. The refusal now returns a typed error with the registered JSON-RPC code `-32002` and a recognisable message, instead of the generic application code `1` ([filecoin-project/lotus#13644](https://github.com/filecoin-project/lotus/pull/13644))
+- fix: update Filecoin FFI to v1.36.1 ([filecoin-project/lotus#13663](https://github.com/filecoin-project/lotus/pull/13663))
+- fix(build): ffi-version-check now depends on the module update ([filecoin-project/lotus#13658](https://github.com/filecoin-project/lotus/pull/13658))
+- fix: docker builds Lotus on bullseye again ([filecoin-project/lotus#13611](https://github.com/filecoin-project/lotus/pull/13611))
+- fix: remove F3 data with existing chain cleanup ([filecoin-project/lotus#13609](https://github.com/filecoin-project/lotus/pull/13609))
+
+## 👌 Improvements
+
+- Silence libp2p config log spam ([filecoin-project/lotus#13612](https://github.com/filecoin-project/lotus/pull/13612))
+- feat(mempool): raise the default per-actor cap on the untrusted push path (`MaxUntrustedActorPendingMessages`) from 10 to 100, reducing spurious `ErrTooManyPendingMessages` rejections for normal-cadence senders relaying through `lotus-gateway` / public RPC ([filecoin-project/lotus#13636](https://github.com/filecoin-project/lotus/pull/13636))
+- chore(cli): `lotus-miner info` supports `--actor` to query any miner without a local miner repo; miner-daemon-only sections (subsystems, start time, alerts, workers, sectors) are skipped when `--actor` is set ([filecoin-project/lotus#13641](https://github.com/filecoin-project/lotus/pull/13641))
+- chore: remove obsolete network-version guards across CLI, state-manager, storage, and miner code. ([filecoin-project/lotus#13680](https://github.com/filecoin-project/lotus/pull/13680))
+- feat: update `mainnet.pi` to remove the Venus bootstrap peer ([filecoin-project/lotus#13648](https://github.com/filecoin-project/lotus/pull/13648))
+
+## 📝 Changelog
+
+For the set of changes since the last stable release:
+
+- Node and Miner: https://github.com/filecoin-project/lotus/compare/release/v1.36.0...release/v1.36.1
+
+## 👨‍👩‍👧‍👦 Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| Phi-rjan | 24 | +39927/-837 | 251 |
+| Rod Vagg | 6 | +1685/-1777 | 34 |
+| William Morriss | 1 | +862/-579 | 23 |
+| Shriraj Pawar | 1 | +368/-105 | 14 |
+| Andrew Jackson (Ajax) | 2 | +290/-90 | 18 |
+| Piotr Galar | 3 | +223/-78 | 14 |
+| dependabot[bot] | 16 | +130/-130 | 29 |
+| beck | 3 | +93/-59 | 9 |
+| Phi | 3 | +33/-33 | 13 |
+| chuanshanjida | 1 | +6/-6 | 6 |
+| Łukasz Magiera | 1 | +5/-5 | 1 |
+| Steve Loeppky | 1 | +7/-3 | 1 |
+| Jakub Sztandera | 2 | +3/-3 | 2 |
+| Aryan Tikarya | 1 | +2/-1 | 2 |
+| Jimmy Zhang | 1 | +0/-1 | 1 |
+
 # Node and Miner v1.36.0 / 2026-05-13
 
 This is the stable release of the **MANDATORY Lotus v1.36.0 release**, which delivers the Filecoin network version 28, codenamed “Fire Horse” 🔥🐎. This release sets the upgrade epoch for the Mainnet network to **Epoch 6052800: 2026-05-27T14:00:00Z**. [See the local time for other timezones.](https://www.worldtimebuddy.com/?qm=1&lid=100,1816670,2643743,5368361&h=100&date=2026-5-27&sln=14-15&hf=0)
@@ -80,71 +213,6 @@ For the set of changes since the last stable release:
 | Aditya Belgaonkar | 1 | +15/-0 | 9 |
 | web3-bot | 2 | +5/-5 | 4 |
 | hanabi1224 | 1 | +4/-0 | 2 |
-
-# Node and Miner v1.36.0-rc1 / 2026-04-29
-
-This is the first release candidate of the upcoming MANDATORY Lotus v1.36.0 release, which will deliver the Filecoin network version 28, codenamed Fire Horse” 🔥🐎. This release candidate sets the upgrade epoch for the Calibration network to Epoch 3694534: 2026-05-07T14:00:00Z. [See the local time for other timezones.](https://www.worldtimebuddy.com/?qm=1&lid=100,1816670,2643743,5368361&h=100&date=2026-5-7&sln=14-15&hf=0)
-
-Mainnet activation is not yet scheduled in this release candidate, and will be determined after a succesful upgrade on Calibration network.
-
-## ☢️ Upgrade Warnings ☢️
-
-- All Lotus node and Storage Provider (SP) operators on Calibration network must upgrade to this release candidate before the specified upgrade date for the Calibration network.
-- The minimum supported Go version is now `1.25.7`. ([filecoin-project/lotus#13594](https://github.com/filecoin-project/lotus/pull/13594))
-
-## 🏛️ Filecoin network version 28 FIPs and FRCs
-
-- [FIP-0112: Export Sector Status to FEVM](https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0112.md)
-- [FIP-0113: secp256r1 (P-256) P256VERIFY Precompile for FEVM](https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0113.md)
-- [FIP-0114: Add Support for EIP-7939 (CLZ Opcode) in the FEVM](https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0114.md)
-- [FIP-0115: Premium Percentile Base Fee Target](https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0115.md)
-
-## 📦 v18 Builtin Actor Bundle
-
-This release candidate uses the [v18.0.0 actor bundle](https://github.com/filecoin-project/builtin-actors/releases/tag/v18.0.0)
-
-## 🚚 Migration
-
-All node operators, including storage providers, should be aware that ONE pre-migration is being scheduled 120 epochs before the network upgrade. The migration for the NV28 upgrade is expected to be light with no heavy pre-migrations:
-
-- Pre-Migration is expected to take less then 3 minutes.
-- The migration on the upgrade epoch is expected to take approximately 30 seconds on a node with a NVMe-drive and a newer CPU. For nodes running on slower disks/CPU, it is still expected to around 1 minute.
-- RAM usages is expected to be under 20GiB RAM for both the pre-migration and migration.
-
-We recommend node operators (who haven’t enabled splitstore discard mode) that do not care about historical chain states, to prune the chain blockstore by syncing from a snapshot 1-2 days before the upgrade.
-
-For certain node operators, such as full archival nodes or systems that need to keep large amounts of state (RPC providers), we recommend skipping the pre-migration and run the non-cached migration (i.e., just running the migration at the network upgrade epoch), and schedule for some additional downtime. Operators of such nodes can read the How to disable premigration in network upgrade tutorial.
-
-## ⭐ New Features highlight
-
-- feat(cli): `lotus wallet export` gains a `--format` flag with a new `hex-eth` value that emits the raw 32-byte private key as hex, directly importable into Ethereum tools such as MetaMask, ethers.js, and Foundry. `hex-eth` is also accepted by `lotus wallet import` together with a `--type` flag (`secp256k1` or `delegated`, defaulting to `delegated`). ([filecoin-project/lotus#13586](https://github.com/filecoin-project/lotus/pull/13586))
-- feat(cliutil): accept non-JWT API tokens in `TOKEN:ADDRESS`, enabling use of third-party RPC providers that issue opaque API keys. Multiaddrs using `/wss` or `/tls` now dial with `wss://`. ([filecoin-project/lotus#13578](https://github.com/filecoin-project/lotus/pull/13578))
-
-## 🐛 Bug Fixes
-
-- fix(state): move `StateGetRandomnessDigestFromBeacon` into `StateModule` so lite nodes can serve the method correctly. ([filecoin-project/lotus#13579](https://github.com/filecoin-project/lotus/pull/13579))
-
-## 📝 Changelog
-
-For the set of changes since the last stable release:
-
-- Node and Miner: https://github.com/filecoin-project/lotus/compare/release/v1.35.1...release/v1.36.0
-
-## 👨‍👩‍👧‍👦 Contributors
-
-| Contributor | Commits | Lines ± | Files Changed |
-|-------------|---------|---------|---------------|
-| Rod Vagg | 8 | +1931/-457 | 89 |
-| dependabot[bot] | 14 | +676/-103 | 28 |
-| Phi-rjan | 9 | +401/-353 | 47 |
-| Aryan Tikarya | 1 | +322/-11 | 5 |
-| beck | 2 | +182/-13 | 4 |
-| Phi | 2 | +71/-16 | 12 |
-| William Morriss | 1 | +4/-40 | 9 |
-| ledigang | 1 | +11/-11 | 11 |
-| Aditya Belgaonkar | 1 | +15/-0 | 9 |
-| hanabi1224 | 1 | +4/-0 | 2 |
-| web3-bot | 1 | +1/-1 | 1 |
 
 # Node v1.35.1 / 2026-03-31
 
