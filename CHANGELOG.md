@@ -17,7 +17,58 @@
 
 ## 👌 Improvements
 
-# Node v1.36.2 / 2026-07-24
+# Node v1.36.3 / 2026-09-10
+
+Lotus Node v1.36.3 is a recommended patch release focused on Ethereum RPC correctness (event-index completeness for `eth_getLogs`/`eth_getTransactionReceipt`, RLP validation), a WebTransport memory-exhaustion fix (CVE-2026-57497), gateway event-query bounding, sector-reporting UX, and operator tooling.
+
+## ☢️ Upgrade Warnings ☢️
+
+- `lotus state active-sectors` has been removed and merged into `lotus state sectors`, which now defaults to active sectors only (previously it returned every committed sector). Use `lotus state sectors --all` for the previous full-sector-set behavior. ([filecoin-project/lotus#13743](https://github.com/filecoin-project/lotus/pull/13743))
+
+## ⭐ New Features
+
+- feat(cli): `lotus state sectors` now prints `Activation`, `Expiration`, `InitialPledge`, and `DailyFee` for each sector by default, and gained a `--human` flag to render epochs as local calendar time and attoFIL amounts as FIL instead of raw numbers. ([filecoin-project/lotus#13743](https://github.com/filecoin-project/lotus/pull/13743))
+- feat(shed): add `lotus-shed eth storage-dump` / `eth storage-decode` to enumerate and decode an EVM contract's on-chain storage KAMT at a given tipset. Dumps slot-sorted NDJSON plus KAMT shape stats (optional CARv1 and `eth_getStorageAt` verification); decodes against a forge storage layout with ERC-1967/7201 support ([filecoin-project/lotus#13730](https://github.com/filecoin-project/lotus/pull/13730))
+- feat(blockstore): `LOTUS_BLOCKSTORE_VERIFY_READS=1` enables a verify-after-read mode for the blockstore, which incurs a hash cost on every block load but can be used to help heal a damaged blockstore by re-importing blocks and overwriting damaged ones. ([filecoin-project/lotus#13752](https://github.com/filecoin-project/lotus/pull/13752))
+- feat(shed): `lotus-shed import-car` can now read and import modern FRC-0108 v2 snapshot CARs into the Lotus blockstore, similar to `lotus daemon --import-snapshot`. ([filecoin-project/lotus#13752](https://github.com/filecoin-project/lotus/pull/13752))
+
+## 🐛 Bug Fixes
+
+- fix(docker): update Debian from bullseye to trixie for `lotus-builder` and `lotus-base` stages; also fetch prebuilt filecoin-ffi libraries instead of compiling them. ([filecoin-project/lotus#13785](https://github.com/filecoin-project/lotus/pull/13785))
+- fix(eth): prevent `eth_getLogs` from returning successful empty or partial results when historical event-index coverage is incomplete. Block-hash queries now require a completed block event index, and range queries verify every canonical non-null tipset before returning logs. ([filecoin-project/lotus#13749](https://github.com/filecoin-project/lotus/issues/13749))
+- fix(eth): prevent `eth_getTransactionReceipt` from returning a successful receipt with an empty `logs` array while that transaction's events are still being indexed. The call now fails until event indexing is complete, while transactions that completed with no events still return an empty array. ([filecoin-project/lotus#13758](https://github.com/filecoin-project/lotus/issues/13758))
+- fix(network): prevent remote memory exhaustion through Lotus's default WebTransport listener by updating go-libp2p and webtransport-go (CVE-2026-57497). ([filecoin-project/lotus#13734](https://github.com/filecoin-project/lotus/pull/13734))
+- fix(events): `GetActorEventsRaw` and `SubscribeActorEventsRaw` now reject a filter whose `toHeight` is negative. ([filecoin-project/lotus#13751](https://github.com/filecoin-project/lotus/pull/13751))
+- fix(eth): `eth_sendRawTransaction` now rejects a transaction whose RLP integer fields are not minimally encoded, matching go-ethereum. ([filecoin-project/lotus#13744](https://github.com/filecoin-project/lotus/pull/13744))
+
+## 👌 Improvements
+
+- build: bump Go version to `1.25.14` from`1.25.7`; build Lotus with Go 1.25.14 or newer. ([filecoin-project/lotus#13786](https://github.com/filecoin-project/lotus/pull/13786))
+- feat(gateway): limit event queries and historical filter preloads to 360 epochs (three hours) by default across `EthGetLogs`, `EthNewFilter`, `GetActorEventsRaw`, and `SubscribeActorEventsRaw`. Gateway operators can change the limit with `--event-filter-max-height-range`, or set it to zero to disable the gateway limit. ([filecoin-project/lotus#13776](https://github.com/filecoin-project/lotus/pull/13776))
+
+## 📝 Changelog
+
+For the full set of changes since the last stable release:
+
+- Node: https://github.com/filecoin-project/lotus/compare/release/v1.36.2...release/v1.36.3
+
+## 👨‍👩‍👧‍👦 Contributors
+
+| Contributor | Commits | Lines ± | Files Changed |
+|-------------|---------|---------|---------------|
+| dependabot[bot] | 11 | +137/-141 | 4 |
+| Rod Vagg | 6 | +2949/-80 | 31 |
+| Steve Loeppky | 4 | +242/-15 | 7 |
+| Phi-rjan | 3 | +234/-90 | 19 |
+| Kaif | 2 | +102/-55 | 9 |
+| Sash | 2 | +20/-9 | 2 |
+| LexLuthr | 1 | +1044/-217 | 10 |
+| beck | 1 | +59/-80 | 4 |
+| fmterrors | 1 | +29/-5 | 2 |
+| zjuzhongwen | 1 | +3/-3 | 1 |
+| zloglevel | 1 | +2/-2 | 2 |
+
+# Node v1.36.2 / 2026-07-27
 
 Lotus Node v1.36.2 is a recommended patch release focused on Ethereum RPC correctness and compatibility, `StateWaitMsg` confidence handling, dependency reliability, and operator tooling.
 
