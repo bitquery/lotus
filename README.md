@@ -125,3 +125,48 @@ Note: The default branch `master` is the dev branch where the latest new feature
 ## License
 
 Dual-licensed under [MIT](https://github.com/filecoin-project/lotus/blob/master/LICENSE-MIT) + [Apache 2.0](https://github.com/filecoin-project/lotus/blob/master/LICENSE-APACHE)
+
+---
+
+## Bitquery ops — resource footprint (mainnet, archival)
+
+Measured on our mainnet full-archive nodes (`filecoin-node` role, docker-compose,
+`EnableSplitstore = false`). Examples: `filecoin-mainnet-4` (ph270),
+`filecoin-mainnet-5` (ph203). Bootstrapped from a ChainSafe **forest lite snapshot**
+via `DOCKER_LOTUS_IMPORT_SNAPSHOT`.
+
+### Steady state (synced, serving the ETL)
+
+| resource | value | notes |
+|---|---|---|
+| CPU | **~5 cores** | ~8–9% of a 64-core host; budget ~6–8 cores |
+| RAM | **~24–27 GiB** RSS | budget **≥32 GiB** |
+| Disk (datastore) | **~2.7 TB, +~1.6 TB/yr** | archival badger, splitstore off → grows continuously (no GC) |
+| Disk **read** IO | **~1.9 GB/s sustained avg** | badger read-amplification on the archive → **NVMe required**; SATA/HDD will lag the ETL |
+| Disk write IO | ~0.4 MB/s avg | |
+| Network | **~2 Mbit/s in / ~3 Mbit/s out** (~18 / 29 GB per day) | libp2p gossip |
+| shm | 4 GB | compose `shm_size` |
+
+### Bootstrap / first sync (from a same-day forest snapshot)
+
+| phase | measured | notes |
+|---|---|---|
+| paramfetch | ~2 GB pulled | minutes; from `proofs.filecoin.io` |
+| snapshot download | **~49 GB** network-in | forest lite snapshot (`.car.zst`) |
+| snapshot import | **~227 GB** badger writes → **~74 GB** on disk | write-heavy burst |
+| header validation | fetches ~6.3M headers back toward genesis | **the long pole** |
+| RAM during bootstrap | ~17 GiB | |
+| **time to working state** | **~2–6 h** | forward catch-up is negligible when the snapshot is current; time is dominated by import + header validation |
+
+**State availability after a lite-snapshot bootstrap:** queryable state
+(`StateGetActor` / `StateReplay` / `StateCompute`) exists from
+**~(snapshot_height − 2000 epochs)** forward. Older blocks retain chain/messages but
+**no state** — deep historical re-processing must go to an archival RPC peer (e.g. Glif)
+or a datastore seeded from an existing archive node.
+
+### Host guidance
+- **NVMe** for the datastore (not HDD/SATA) — the ~GB/s read amplification dominates.
+- **≥6 TB** free → ~2.5 yr archival runway (2.7 TB + ~1.6 TB/yr).
+- **≥32 GiB** RAM, **~8** cores.
+- To cap disk instead of running full-archive, enable splitstore + discard-cold (keeps a
+  bounded hot window; loses deep re-processing → falls back to archival RPC).
