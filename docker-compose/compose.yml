@@ -25,6 +25,14 @@ services:
       - DOCKER_LOTUS_IMPORT_SNAPSHOT=${LC_COMPOSE_SNAPSHOT_URL}
     ports:
       - ${LC_COMPOSE_IPADDR}:${LC_COMPOSE_RPC_PORT}:1234
+    # Предохранитель от разгона: 15.09 lotus на ph151 без лимита набрал 111 ГБ anon-rss
+    # из 125 и вызвал ГЛОБАЛЬНЫЙ OOM (constraint=CONSTRAINT_NONE) — хост ушёл в memory
+    # pressure и не отвечал 16 часов, пока его не перезагрузили. Ноду должно убивать ядро
+    # внутри cgroup, а не забирать с собой весь сервер.
+    # 0 = без лимита (поведение хостов, где node_memlimit в инвентаре не задан).
+    # memswap_limit = mem_limit, иначе docker разрешает вдвое больше за счёт свопа.
+    mem_limit: ${LC_COMPOSE_NODE_MEMLIMIT:-0}
+    memswap_limit: ${LC_COMPOSE_NODE_MEMLIMIT:-0}
     shm_size: '4gb'
     volumes:
       - data:/var/lib/lotus
