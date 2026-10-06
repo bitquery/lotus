@@ -143,7 +143,32 @@ const UpgradeGoldenWeekHeight = abi.ChainEpoch(5348280)
 // 2026-05-27T:14:00:00Z
 var UpgradeFireHorseHeight = abi.ChainEpoch(6052800)
 
-var UpgradeSolsticeHeight = abi.ChainEpoch(9999999999)
+// 2026-10-19T12:59:30Z
+var UpgradeSolsticeHeight = abi.ChainEpoch(6470279)
+
+// SolsticeEpochsPerQuarter matches the quarter the SRA is deployed with: a quarter of the
+// builtin-actors year, 31556925 seconds of 30 second epochs. The ramp runs nine of them.
+const SolsticeEpochsPerQuarter = abi.ChainEpoch(262974)
+
+// FIP-0118: reward actor bootstrap state installed by the Solstice migration.
+// Addresses must be set before enabling the upgrade.
+var UpgradeSolsticeRewardBootstrapParams = SolsticeRewardBootstrapParams{
+	SWATimelockEpochs:                 builtin.EpochsInDay * 7,
+	ConsensusWeightRampDurationEpochs: SolsticeEpochsPerQuarter * 9,
+	ConsensusWeight: SolsticeRewardWeightParams{
+		VStart: 95 * solsticeRewardWeightPercent,
+		Floor:  50 * solsticeRewardWeightPercent,
+		Cap:    95 * solsticeRewardWeightPercent,
+	},
+	ServiceWeight: SolsticeRewardWeightParams{
+		VStart: 5 * solsticeRewardWeightPercent,
+		Floor:  5 * solsticeRewardWeightPercent,
+		Cap:    10 * solsticeRewardWeightPercent,
+	},
+	SWAActor:            MustParseFilOrEthAddress("0x66C11A9F6dfEC3c1557958cF9f575a023EB01421"),
+	SRAActor:            MustParseFilOrEthAddress("0x0339f205314C8210AF7Cb075d1A96D012e7896a9"),
+	InitialOrchestrator: MustParseFilOrEthAddress("0x97A90f5696be5E3C8d3752C92Adac287c2b4484e"),
+}
 
 var UpgradeTeepInitialFilReserved = InitialFilReserved // FIP-0100: no change for mainnet
 

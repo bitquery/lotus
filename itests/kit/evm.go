@@ -20,7 +20,6 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
-	amt4 "github.com/filecoin-project/go-amt-ipld/v4"
 	"github.com/filecoin-project/go-keccak"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -32,6 +31,7 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain/actors"
+	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
 	"github.com/filecoin-project/lotus/chain/wallet/key"
@@ -228,21 +228,9 @@ func (e *EVM) InvokeSolidityWithValue(ctx context.Context, sender address.Addres
 func (e *EVM) LoadEvents(ctx context.Context, eventsRoot cid.Cid) []types.Event {
 	require := require.New(e.t)
 
-	s := &apiIpldStore{ctx, e}
-	amt, err := amt4.LoadAMT(ctx, s, eventsRoot, amt4.UseTreeBitWidth(types.EventAMTBitwidth))
+	events, err := store.ReadEvents(ctx, &apiIpldStore{ctx, e}, eventsRoot, 0)
 	require.NoError(err)
-
-	ret := make([]types.Event, 0, amt.Len())
-	err = amt.ForEach(ctx, func(u uint64, deferred *cbg.Deferred) error {
-		var evt types.Event
-		if err := evt.UnmarshalCBOR(bytes.NewReader(deferred.Raw)); err != nil {
-			return err
-		}
-		ret = append(ret, evt)
-		return nil
-	})
-	require.NoError(err)
-	return ret
+	return events
 }
 
 func (e *EVM) NewAccount() (*key.Key, ethtypes.EthAddress, address.Address) {
@@ -313,18 +301,46 @@ func (e *EVM) SubmitTransaction(ctx context.Context, tx ethtypes.EthTransaction)
 // ComputeContractAddress computes the address of a contract deployed by the
 // specified address with the specified nonce.
 func (e *EVM) ComputeContractAddress(deployer ethtypes.EthAddress, nonce uint64) ethtypes.EthAddress {
+	return ComputeContractAddress(e.t, deployer, nonce)
+}
+
+// ComputeContractAddress computes the address of a contract deployed by the specified address with
+// the specified nonce: keccak256(rlp([deployer, nonce]))[12:], the EVM's CREATE rule.
+func ComputeContractAddress(t *testing.T, deployer ethtypes.EthAddress, nonce uint64) ethtypes.EthAddress {
+	t.Helper()
 	nonceRlp, err := formatInt(int(nonce))
-	require.NoError(e.t, err)
+	require.NoError(t, err)
 
 	encoded, err := ethtypes.EncodeRLP([]interface{}{
 		deployer[:],
 		nonceRlp,
 	})
-	require.NoError(e.t, err)
+	require.NoError(t, err)
 
 	hasher := keccak.NewLegacyKeccak256()
 	hasher.Write(encoded)
 	return *(*ethtypes.EthAddress)(hasher.Sum(nil)[12:])
+}
+
+// EthAddressForCreate returns the EVM-space address that the EAM derives sender's contract
+// addresses from: an f410 sender is already in that space, an f1/f3 sender hashes into it.
+func EthAddressForCreate(t *testing.T, sender address.Address) ethtypes.EthAddress {
+	t.Helper()
+	switch sender.Protocol() {
+	case address.SECP256K1, address.BLS:
+		hasher := keccak.NewLegacyKeccak256()
+		hasher.Write(sender.Bytes())
+		addr, err := ethtypes.CastEthAddress(hasher.Sum(nil)[12:])
+		require.NoError(t, err)
+		return addr
+	case address.Delegated:
+		addr, err := ethtypes.EthAddressFromFilecoinAddress(sender)
+		require.NoError(t, err)
+		return addr
+	default:
+		require.FailNowf(t, "cannot deploy from this address", "unsupported protocol %d", sender.Protocol())
+		panic("unreachable")
+	}
 }
 
 // GetEthBlockFromWait returns and eth block from a wait return.

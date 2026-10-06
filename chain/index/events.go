@@ -1,23 +1,20 @@
 package index
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/ipfs/go-cid"
 	ipld "github.com/ipfs/go-ipld-format"
-	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
-	amt4 "github.com/filecoin-project/go-amt-ipld/v4"
 	"github.com/filecoin-project/go-state-types/abi"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 
+	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
 )
@@ -78,24 +75,10 @@ func (si *SqliteIndexer) indexEvents(ctx context.Context, tx *sql.Tx, msgTs *typ
 	if err != nil {
 		return xerrors.Errorf("failed to get rows affected by unreverting events for tipset: %w", err)
 	}
-	blockBloom := ethtypes.NewEmptyEthBloom()
-
 	if rows > 0 {
 		log.Debugf("unreverted %d events for tipset: %s", rows, msgTs.Key())
-		hasBloom, err := si.hasTipsetBloom(ctx, tx, msgTsKeyCidBytes)
-		if err != nil {
-			return xerrors.Errorf("failed to check tipset bloom: %w", err)
-		}
-		if hasBloom {
-			return nil
-		}
-		if err := si.buildTipsetBloomFromIndex(ctx, tx, msgTsKeyCidBytes, blockBloom); err != nil {
-			return xerrors.Errorf("failed to build tipset bloom from index: %w", err)
-		}
-		if err := si.upsertTipsetBloom(ctx, tx, msgTsKeyCidBytes, msgTs.Height(), blockBloom); err != nil {
-			return xerrors.Errorf("failed to store tipset bloom: %w", err)
-		}
-		return nil
+		_, err := si.ensureTipsetBloomFromIndex(ctx, tx, msgTsKeyCidBytes, msgTs.Height())
+		return err
 	}
 
 	if !si.cs.IsStoringEvents() {
@@ -107,6 +90,7 @@ func (si *SqliteIndexer) indexEvents(ctx context.Context, tx *sql.Tx, msgTs *typ
 		return xerrors.Errorf("failed to load executed messages: %w", err)
 	}
 
+	blockBloom := ethtypes.NewEmptyEthBloom()
 	eventCount := 0
 	messageIDs := make(map[string]int64)
 
@@ -256,6 +240,26 @@ func (si *SqliteIndexer) buildTipsetBloomFromIndex(ctx context.Context, tx *sql.
 	return flush()
 }
 
+// ensureTipsetBloomFromIndex writes a bloom built from the tipset's indexed
+// events if the tipset has none, and reports whether one was written.
+func (si *SqliteIndexer) ensureTipsetBloomFromIndex(ctx context.Context, tx *sql.Tx, tipsetKeyCid []byte, height abi.ChainEpoch) (bool, error) {
+	hasBloom, err := si.hasTipsetBloom(ctx, tx, tipsetKeyCid)
+	if err != nil {
+		return false, xerrors.Errorf("failed to check tipset bloom: %w", err)
+	}
+	if hasBloom {
+		return false, nil
+	}
+	bloom := ethtypes.NewEmptyEthBloom()
+	if err := si.buildTipsetBloomFromIndex(ctx, tx, tipsetKeyCid, bloom); err != nil {
+		return false, xerrors.Errorf("failed to build tipset bloom from index: %w", err)
+	}
+	if err := si.upsertTipsetBloom(ctx, tx, tipsetKeyCid, height, bloom); err != nil {
+		return false, xerrors.Errorf("failed to store tipset bloom: %w", err)
+	}
+	return true, nil
+}
+
 func addEventToBloom(blockBloom ethtypes.EthBytes, emitterAddr address.Address, entries []types.EventEntry) {
 	ethAddr, err := ethtypes.EthAddressFromFilecoinAddress(emitterAddr)
 	if err != nil {
@@ -346,39 +350,21 @@ func loadExecutedMessages(ctx context.Context, cs ChainStore, recomputeTipSetSta
 			continue
 		}
 
-		eventsArr, err := amt4.LoadAMT(ctx, st, *rct.EventsRoot, amt4.UseTreeBitWidth(types.EventAMTBitwidth))
+		evs, err := store.ReadEvents(ctx, st, *rct.EventsRoot, 0)
 		if err != nil {
 			if !ipld.IsNotFound(err) || recomputeTipSetStateFunc == nil || recomputed {
-				return nil, xerrors.Errorf("failed to load events root for message %s: err: %w", ems[i].msg.Cid(), err)
+				return nil, xerrors.Errorf("failed to read events for message %s: %w", ems[i].msg.Cid(), err)
 			}
 			// we may have the receipts but not the events, IsStoringEvents may have been false
 			if err := recompute(err); err != nil {
 				return nil, err
 			}
-			eventsArr, err = amt4.LoadAMT(ctx, st, *rct.EventsRoot, amt4.UseTreeBitWidth(types.EventAMTBitwidth))
+			evs, err = store.ReadEvents(ctx, st, *rct.EventsRoot, 0)
 			if err != nil {
-				return nil, xerrors.Errorf("failed to load events amt for re-executed tipset for message %s: %w", ems[i].msg.Cid(), err)
+				return nil, xerrors.Errorf("failed to read events for re-executed tipset for message %s: %w", ems[i].msg.Cid(), err)
 			}
 		}
-
-		ems[i].evs = make([]types.Event, eventsArr.Len())
-		var evt types.Event
-		err = eventsArr.ForEach(ctx, func(u uint64, deferred *cbg.Deferred) error {
-			if u > math.MaxInt {
-				return xerrors.Errorf("too many events")
-			}
-			if err := evt.UnmarshalCBOR(bytes.NewReader(deferred.Raw)); err != nil {
-				return err
-			}
-
-			cpy := evt
-			ems[i].evs[int(u)] = cpy
-			return nil
-		})
-
-		if err != nil {
-			return nil, xerrors.Errorf("failed to iterate over events for message %d: %w", i, err)
-		}
+		ems[i].evs = evs
 	}
 
 	return ems, nil
