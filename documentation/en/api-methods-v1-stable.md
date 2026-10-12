@@ -489,7 +489,7 @@ CAR-snapshot directly to disk. It is similar to ChainExport,
 except, depending on options, the snapshot can include receipts,
 messages and stateroots for the length between the specified head
 and tail, thus producing "archival-grade" snapshots that include
-all the on-chain data.  The header chain is included back to
+all the on-chain data. The header chain is included back to
 genesis and these snapshots can be used to initialize Filecoin
 nodes.
 
@@ -1687,7 +1687,12 @@ Perms: admin
 Inputs:
 ```json
 [
-  {}
+  {
+    "Cid": {
+      "/": "bafy2bzacedo7hjsumaajt6sbor42qycvjyk6goqe4oi4o4ddsjxkdeqrqf42c"
+    },
+    "RawData": "kEQAr6Z2gVhgrIPyBy+F827Szc5oN/6ylCmpzxfAWr7aI5F4YJrN4pLSyknkcJI3ivsCo2KKjQVZFRnFyEus1maD5LdzQpnFRKMla4138qEuML+Ne/fsgOMrUEAeL34ceVwJd+Mt4JrzggFYYLDedSao2TX/sVscKKPsJTB9W6VyPU98FCK5WuhacE8VOIwtc/mm+TRVPwdmXQyE0xPrvKmoom7S5JXeZYTXDhDlKsCjcieJ8BaObwIVqrzkzXTomZsbCqVhtDWVKF2//oKCGgEFcP5YMLR+KvHriGj/f0ESbfAC35Ab7bUpkPwzgLfPt+8BhleX/JJIcxBax4bJIrTZz0u9I4IaAQVxCFgwuQD5cEn8U69+sPjpccT8Bm0jVrnXLScf2jBkLJNHvAHLA6tPsZDREzpBIckpVvPygYIDWMCo48syEy6Lyqb+sTbL9Rx7IEO/km9EIfkVzlSX6S43X3RcNwyZ7l4pRFQKYTaw3UehDZ0xlf7E1ljfnV1sb3cf+1SvrC42GS+Z6aLZeLrZi+pTfr+QmH4rZgGJbuH/gtcJRM//pcA4404+X6P0apLtFDGu48t8jJ6G/NULQLx0Hz5JVa0CdEpE9RQ48m/Icp6OWsLLNZc7P8jskbb+oQYsPTHBrMFXAwvW9W+4Tk3Nd46hAaWcHY/BJFvkKfwUfxCD2CpYJwABcaDkAiBBpQ2YkxHUEobNa9a/5dLcEGMvrNX//HT/G/TD1z4aMNgqWCcAAXGg5AIgo4Jrk1QjWoxiL7Rio5njt7zqYyDC8AFuiN2QXLHOk4TYKlgnAAFxoOQCIAPWRcdNWv2zP2O3tWPwgtkpRl+pIMTEzqALfB2j6PHvRgAbAuwj7hoASjUz2CpYJwABcaDkAiATfMq5pDYx5uWMtJWC8nOgww8dpcMKJanG8d8ijM5x+tgqWCcAAXGg5AIgiivrCoUFiuzKxEWN0faNRxBnaplN951QxIhR2kYxlgHYKlgnAAFxoOQCIHLisP5iDVFyvoSYT1aXWdHn104WOAfhAt0QdMGfHRm6WGECkrFATGA0OBu/kFwtXsThVtKCkppnU7045uTURCeiOeJttxuXfx3wqJrLkCytnJFWFLVC+tiVWI4BxC3wqc9r6eAlNr9dEBx+3KwML/RFG/b5grmknLpGWn7g1EB/2T4yGmf2dFpYYQKlaJSv4zzHFPEsQPsa5TnzqBJ9kJofItsuPS5LQeEphG0e7Ibjt8it8hP/Tg4KZC8RcEPykWtpZsxze2cWtKwzWYgEnkzfxQ9R9cNKymj5AZ2i6jaSWXZf5U0pjdqNvUoARQABOjWk"
+  }
 ]
 ```
 
@@ -1965,6 +1970,7 @@ Inputs:
     "to": "0x5cbeecf99d3fdb3f25e309cc264f240bb0664031",
     "gas": "0x5",
     "gasPrice": "0x0",
+    "maxFeePerGas": "0x0",
     "value": "0x0",
     "data": "0x07"
   },
@@ -2741,7 +2747,7 @@ Inputs:
 Response: `"0x37690cfec6c1bf4c3b9288c7a5d783e98731e90b0a4c177c2a374c7a9427355e"`
 
 ### EthSendRawTransactionUntrusted
-EthSendRawTransactionUntrusted sends a transaction from and untrusted source, using MpoolPushUntrusted to submit the message.
+EthSendRawTransactionUntrusted sends a transaction from an untrusted source, using MpoolPushUntrusted to submit the message.
 
 
 Perms: read
@@ -2760,7 +2766,7 @@ Subscribe to different event types using websockets
 eventTypes is one or more of:
  - newHeads: notify when new blocks arrive.
  - pendingTransactions: notify when new messages arrive in the message pool.
- - logs: notify new event logs that match a criteria
+ - logs: notify new event logs that match a criterion
 params contains additional parameters used with the log event type
 The client will receive a stream of EthSubscriptionResponse values until EthUnsubscribe is called.
 
@@ -3846,7 +3852,7 @@ Response:
 ### MinerCreateBlock
 
 
-Perms: write
+Perms: sign
 
 Inputs:
 ```json
@@ -7143,7 +7149,7 @@ Inputs:
 Response: `{}`
 
 ### StateEncodeParams
-StateEncodeParams attempts to encode the provided json params to the binary from
+StateEncodeParams attempts to encode the provided JSON params to the binary form
 
 
 Perms: read

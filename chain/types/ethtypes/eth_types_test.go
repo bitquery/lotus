@@ -12,6 +12,8 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/builtin"
+
+	"github.com/filecoin-project/lotus/build/buildconstants"
 )
 
 type TestCase struct {
@@ -220,6 +222,32 @@ func TestMaskedIDInF4(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestEthCallGasLimit(t *testing.T) {
+	blockGasLimit := buildconstants.BlockGasLimit
+	tests := []struct {
+		name string
+		call string
+		want int64
+	}{
+		{name: "omitted", call: `{}`, want: blockGasLimit},
+		{name: "zero", call: `{"gas":"0x0"}`, want: blockGasLimit},
+		{name: "small", call: `{"gas":"0x3e8"}`, want: 1000},
+		{name: "below block limit", call: fmt.Sprintf(`{"gas":"0x%x"}`, blockGasLimit-1), want: blockGasLimit - 1},
+		{name: "block limit", call: fmt.Sprintf(`{"gas":"0x%x"}`, blockGasLimit), want: blockGasLimit},
+		{name: "above block limit", call: fmt.Sprintf(`{"gas":"0x%x"}`, blockGasLimit+1), want: blockGasLimit},
+		{name: "max uint64", call: `{"gas":"0xffffffffffffffff"}`, want: blockGasLimit},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var call EthCall
+			require.NoError(t, json.Unmarshal([]byte(tt.call), &call))
+			msg, err := call.ToFilecoinMessage()
+			require.NoError(t, err)
+			require.Equal(t, tt.want, msg.GasLimit)
+		})
+	}
+}
+
 func TestUnmarshalEthCall(t *testing.T) {
 	data := `{"from":"0x4D6D86b31a112a05A473c4aE84afaF873f632325","to":"0xFe01CC39f5Ae8553D6914DBb9dC27D219fa22D7f","gas":"0x5","gasPrice":"0x6","value":"0x123","data":"0xFF"}`
 
@@ -273,6 +301,34 @@ func TestUnmarshalEthBytes(t *testing.T) {
 		data, err := s.MarshalJSON()
 		require.Nil(t, err)
 		require.Equal(t, string(data), tc)
+	}
+
+	// a second 0x anywhere in the string is malformed and must be rejected, not
+	// silently stripped and mis-decoded (e.g. "0xab0xcd" -> abcd)
+	for _, tc := range []string{`"0x0x"`, `"0xab0xcd"`, `"0xdead0xbeef"`} {
+		var s EthBytes
+		require.Error(t, s.UnmarshalJSON([]byte(tc)), "expected %s to be rejected", tc)
+	}
+}
+
+func TestEthUint64FromHex(t *testing.T) {
+	for _, tc := range []struct {
+		in  string
+		out EthUint64
+	}{
+		{"0x0", 0},
+		{"0x41", 65},
+		{"0x400", 1024},
+	} {
+		got, err := EthUint64FromHex(tc.in)
+		require.NoError(t, err)
+		require.Equal(t, tc.out, got)
+	}
+
+	// a second 0x is malformed and must be rejected rather than stripped
+	for _, in := range []string{"0x40x1", "0x10x1"} {
+		_, err := EthUint64FromHex(in)
+		require.Error(t, err, "expected %s to be rejected", in)
 	}
 }
 

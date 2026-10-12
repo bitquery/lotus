@@ -1,30 +1,39 @@
-// Tests for the simulation endpoints, eth_call and eth_estimateGas: sender handling
-// (contract, non-existent, placeholder and EOA senders), revert data propagation, gas
-// estimation accuracy, block parameter handling, and simulation state isolation.
+// Tests for the simulation endpoints, eth_call, eth_estimateGas, StateCall and the Filecoin
+// gas estimation API: sender handling (contract, non-existent, placeholder and EOA senders),
+// revert data propagation, gas limits and estimation accuracy, block parameter handling, and
+// simulation state isolation.
 package itests
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	cbg "github.com/whyrusleeping/cbor-gen"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/builtin"
+	"github.com/filecoin-project/go-state-types/exitcode"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build/buildconstants"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/account"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/ethtypes"
+	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/itests/kit"
 )
 
@@ -338,10 +347,12 @@ func TestEthEstimateGasSkipSender(t *testing.T) {
 		{
 			name:    "FromContractWithGasPrice",
 			call:    ethtypes.EthCall{From: &env.contractAddr, To: &env.eoaAddr, GasPrice: gasPrice},
-			wantErr: false,
-			check: func(t *testing.T, gas ethtypes.EthUint64, _ error) {
-				require.GreaterOrEqual(t, uint64(gas), minGas, "gas should be at least minimum transfer gas")
-				require.Less(t, uint64(gas), maxGas, "gas should not overflow")
+			wantErr: true,
+			check: func(t *testing.T, _ ethtypes.EthUint64, err error) {
+				// An empty account can pay for no gas at a non-zero price.
+				var invalid *api.ErrInvalidInput
+				require.ErrorAs(t, err, &invalid)
+				require.Equal(t, "gas required exceeds allowance (0)", invalid.Message)
 			},
 		},
 		{
@@ -374,10 +385,12 @@ func TestEthEstimateGasSkipSender(t *testing.T) {
 		{
 			name:    "FromNonExistentWithGasPrice",
 			call:    ethtypes.EthCall{From: &nonExistent, To: &env.eoaAddr, GasPrice: gasPrice},
-			wantErr: false,
-			check: func(t *testing.T, gas ethtypes.EthUint64, _ error) {
-				require.GreaterOrEqual(t, uint64(gas), minGas, "gas should be at least minimum transfer gas")
-				require.Less(t, uint64(gas), maxGas, "gas should not overflow")
+			wantErr: true,
+			check: func(t *testing.T, _ ethtypes.EthUint64, err error) {
+				// An empty account can pay for no gas at a non-zero price.
+				var invalid *api.ErrInvalidInput
+				require.ErrorAs(t, err, &invalid)
+				require.Equal(t, "gas required exceeds allowance (0)", invalid.Message)
 			},
 		},
 		{
@@ -957,6 +970,341 @@ func TestEthCall(t *testing.T) {
 		require.Equal(t, dataErr.Data, "0x4e487b710000000000000000000000000000000000000000000000000000000000000012", "Expected error data to contain 'DivideByZero()'")
 	})
 }
+
+func TestEthCallGasLimit(t *testing.T) {
+	env := setupSkipSenderTest(t)
+	defer env.cancel()
+
+	blkParam := ethtypes.NewEthBlockNumberOrHashFromPredefined("latest")
+	data := kit.EvmCalldata("getBalance(address)", kit.EvmWordBytes(env.eoaAddr[:]))
+	// The funded EOA has no tokens in SimpleCoin.
+	want := ethtypes.EthBytes(make([]byte, 32))
+
+	call := ethtypes.EthCall{From: &env.eoaAddr, To: &env.contractAddr, Data: data}
+	gasParams, err := json.Marshal(ethtypes.EthEstimateGasParams{Tx: call, BlkParam: &blkParam})
+	require.NoError(t, err)
+	gasLimit, err := env.client.EthEstimateGas(env.ctx, gasParams)
+	require.NoError(t, err)
+	require.Greater(t, gasLimit, ethtypes.EthUint64(1))
+
+	for _, tc := range []struct {
+		name    string
+		gas     ethtypes.EthUint64
+		wantErr bool
+	}{
+		{"Default", 0, false},
+		{"Estimated", gasLimit, false},
+		{"Insufficient", gasLimit / 2, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			call.Gas = tc.gas
+			result, err := env.client.EthCall(env.ctx, call, blkParam)
+			if tc.wantErr {
+				var execErr *api.ErrExecutionReverted
+				require.ErrorAs(t, err, &execErr)
+				require.Contains(t, execErr.Message, exitcode.SysErrOutOfGas.String())
+				require.Contains(t, execErr.Message, "message failed with backtrace",
+					"gas must be exhausted during execution, not message inclusion")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, want, result)
+		})
+	}
+}
+
+func TestEthEstimateGasLimit(t *testing.T) {
+	env := setupSkipSenderTest(t)
+	defer env.cancel()
+
+	blkParam := ethtypes.NewEthBlockNumberOrHashFromPredefined("latest")
+	estimate := func(t *testing.T, call ethtypes.EthCall) (ethtypes.EthUint64, error) {
+		t.Helper()
+		params, err := json.Marshal(ethtypes.EthEstimateGasParams{Tx: call, BlkParam: &blkParam})
+		require.NoError(t, err)
+		return env.client.EthEstimateGas(env.ctx, params)
+	}
+	testCaps := func(t *testing.T, call ethtypes.EthCall, want ethtypes.EthBytes) {
+		t.Helper()
+		baseline, err := estimate(t, call)
+		require.NoError(t, err)
+		require.Greater(t, baseline, ethtypes.EthUint64(1))
+
+		for _, tc := range []struct {
+			name    string
+			cap     ethtypes.EthUint64
+			wantErr bool
+		}{
+			{"Generous", baseline * 2, false},
+			// This cap permits execution but leaves less room for the estimation margin.
+			{"BelowEstimationMargin", baseline * 9 / 10, false},
+			{"Insufficient", baseline / 2, true},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				call.Gas = tc.cap
+				result, callErr := env.client.EthCall(env.ctx, call, blkParam)
+				if tc.wantErr {
+					require.Error(t, callErr, "the cap must be insufficient for execution")
+					_, err := estimate(t, call)
+					var capErr *api.ErrTransactionRejected
+					require.ErrorAs(t, err, &capErr, "estimation must not exceed the requested gas cap")
+					require.Equal(t, fmt.Sprintf("out of gas: gas required exceeds: %d", tc.cap), capErr.Message)
+					return
+				}
+				require.NoError(t, callErr, "the cap must permit execution")
+				require.Equal(t, want, result)
+
+				gas, err := estimate(t, call)
+				require.NoError(t, err)
+				if tc.cap >= baseline {
+					require.Equal(t, baseline, gas, "a generous cap must preserve the normal estimate")
+				} else {
+					require.Equal(t, tc.cap, gas, "an executable cap must replace the estimation margin")
+				}
+				call.Gas = gas
+				result, err = env.client.EthCall(env.ctx, call, blkParam)
+				require.NoError(t, err, "the returned estimate must permit execution")
+				require.Equal(t, want, result)
+			})
+		}
+	}
+
+	nonExistent := nonExistentAddr(0x75)
+	for _, sender := range []struct {
+		name string
+		from *ethtypes.EthAddress
+	}{
+		{"FundedEOA", &env.eoaAddr},
+		{"Contract", &env.contractAddr},
+		{"NonExistent", &nonExistent},
+	} {
+		t.Run(sender.name, func(t *testing.T) {
+			testCaps(t, ethtypes.EthCall{
+				From: sender.from,
+				To:   &env.contractAddr,
+				Data: kit.EvmCalldata("getBalance(address)", kit.EvmWordBytes(env.eoaAddr[:])),
+			}, ethtypes.EthBytes(make([]byte, 32)))
+		})
+	}
+
+	t.Run("NestedCall", func(t *testing.T) {
+		// Nested calls require gas search because the 63/64 stipend rule makes the
+		// limit needed for execution higher than the gas consumed.
+		_, recursiveFilAddr := env.client.EVM().DeployContractFromFilename(env.ctx, "contracts/ExternalRecursiveCallSimple.hex")
+		recursiveAddr, err := ethtypes.EthAddressFromFilecoinAddress(recursiveFilAddr)
+		require.NoError(t, err)
+		testCaps(t, ethtypes.EthCall{
+			From: &env.eoaAddr,
+			To:   &recursiveAddr,
+			Data: kit.EvmCalldata("exec1(uint256)", kit.EvmWordUint64(100)),
+		}, ethtypes.EthBytes{})
+	})
+
+	t.Run("BelowInclusionCost", func(t *testing.T) {
+		// Preflight rejects the message before execution: reth's "invalid input" error.
+		// Contract senders are applied implicitly, without an inclusion cost, so they run
+		// out of gas during execution instead.
+		for name, from := range map[string]*ethtypes.EthAddress{"FundedEOA": &env.eoaAddr, "NonExistent": &nonExistent} {
+			t.Run(name, func(t *testing.T) {
+				_, err := estimate(t, ethtypes.EthCall{
+					From: from,
+					To:   &env.contractAddr,
+					Data: kit.EvmCalldata("getBalance(address)", kit.EvmWordBytes(env.eoaAddr[:])),
+					Gas:  1000,
+				})
+				var allowanceErr *api.ErrInvalidInput
+				require.ErrorAs(t, err, &allowanceErr, "preserve the registered error type through RPC")
+				require.Equal(t, "gas required exceeds allowance (1000)", allowanceErr.Message)
+			})
+		}
+	})
+
+	t.Run("GasDependentRevert", func(t *testing.T) {
+		// The call reverts unless threshold gas remains, so the normal estimate reverts but
+		// more gas succeeds.
+		_, gasDependentFilAddr := env.client.EVM().DeployContractFromFilename(env.ctx, "contracts/GasDependent.hex")
+		gasDependentAddr, err := ethtypes.EthAddressFromFilecoinAddress(gasDependentFilAddr)
+		require.NoError(t, err)
+		const threshold = 100_000_000
+		call := ethtypes.EthCall{
+			From: &env.eoaAddr,
+			To:   &gasDependentAddr,
+			Data: kit.EvmCalldata("requireGas(uint256)", kit.EvmWordUint64(threshold)),
+		}
+
+		for _, gasCap := range []ethtypes.EthUint64{0, ethtypes.EthUint64(buildconstants.BlockGasLimit)} {
+			call.Gas = gasCap
+			gas, err := estimate(t, call)
+			require.NoError(t, err, "the search continues past the revert")
+			require.Greater(t, gas, ethtypes.EthUint64(threshold))
+			call.Gas = gas
+			_, err = env.client.EthCall(env.ctx, call, blkParam)
+			require.NoError(t, err, "the returned estimate must permit execution")
+		}
+
+		call.Gas = threshold / 2
+		_, err = estimate(t, call)
+		var rejected *api.ErrTransactionRejected
+		require.ErrorAs(t, err, &rejected)
+		require.Equal(t, fmt.Sprintf("out of gas: gas required exceeds: %d", threshold/2), rejected.Message)
+	})
+
+	t.Run("PriceLimitsGas", func(t *testing.T) {
+		// With a price, the estimate is limited to the gas the sender can pay for.
+		call := ethtypes.EthCall{
+			From: &env.eoaAddr,
+			To:   &env.contractAddr,
+			Data: kit.EvmCalldata("getBalance(address)", kit.EvmWordBytes(env.eoaAddr[:])),
+		}
+		baseline, err := estimate(t, call)
+		require.NoError(t, err)
+		balanceEth, err := env.client.EthGetBalance(env.ctx, env.eoaAddr, blkParam)
+		require.NoError(t, err)
+		balance := big.Int(balanceEth)
+		priceFor := func(gas ethtypes.EthUint64) *ethtypes.EthBigInt {
+			price := ethtypes.EthBigInt(big.Div(balance, big.NewInt(int64(gas))))
+			return &price
+		}
+		allowance := func(price *ethtypes.EthBigInt) ethtypes.EthUint64 {
+			return ethtypes.EthUint64(big.Div(balance, big.Int(*price)).Uint64())
+		}
+
+		call.MaxFeePerGas = priceFor(baseline * 2)
+		gas, err := estimate(t, call)
+		require.NoError(t, err)
+		require.Equal(t, baseline, gas, "an affordable estimate is unchanged")
+
+		call.MaxFeePerGas = priceFor(baseline * 9 / 10)
+		gas, err = estimate(t, call)
+		require.NoError(t, err)
+		require.Equal(t, allowance(call.MaxFeePerGas), gas, "an executable allowance replaces the estimation margin")
+
+		call.GasPrice = ethtypes.EthBigInt(big.NewInt(1))
+		_, err = estimate(t, call)
+		var invalidParams *api.ErrInvalidParams
+		require.ErrorAs(t, err, &invalidParams, "both prices are rejected")
+
+		call.MaxFeePerGas = nil
+		call.GasPrice = *priceFor(baseline / 2)
+		_, err = estimate(t, call)
+		var rejected *api.ErrTransactionRejected
+		require.ErrorAs(t, err, &rejected)
+		require.Equal(t, fmt.Sprintf("out of gas: gas required exceeds: %d", allowance(&call.GasPrice)), rejected.Message)
+
+		call.GasPrice = ethtypes.EthBigInt(big.NewInt(1))
+		call.Value = ethtypes.EthBigInt(big.Add(balance, big.NewInt(1)))
+		_, err = estimate(t, call)
+		require.ErrorAs(t, err, &rejected)
+		require.Equal(t, fmt.Sprintf("insufficient funds for gas * price + value: have %s want %s", balance, big.Int(call.Value)), rejected.Message)
+
+		_, err = estimate(t, ethtypes.EthCall{
+			From:     &nonExistent,
+			To:       &env.contractAddr,
+			Data:     kit.EvmCalldata("getBalance(address)", kit.EvmWordBytes(env.eoaAddr[:])),
+			GasPrice: ethtypes.EthBigInt(big.NewInt(1)),
+		})
+		var invalid *api.ErrInvalidInput
+		require.ErrorAs(t, err, &invalid, "a sender with no funds can pay for no gas")
+		require.Equal(t, "gas required exceeds allowance (0)", invalid.Message)
+	})
+
+	t.Run("SenderFundedInBlock", func(t *testing.T) {
+		// The sender's balance is read from the state after the requested block's messages.
+		_, senderAddr, senderFilAddr := env.client.EVM().NewAccount()
+		fromAddr, err := env.client.WalletDefaultAddress(env.ctx)
+		require.NoError(t, err)
+		sm, err := env.client.MpoolPushMessage(env.ctx, &types.Message{From: fromAddr, To: senderFilAddr, Value: types.FromFil(1)}, nil)
+		require.NoError(t, err)
+		lookup, err := env.client.StateWaitMsg(env.ctx, sm.Cid(), 1, api.LookbackNoLimit, true)
+		require.NoError(t, err)
+		executed, err := env.client.ChainGetTipSet(env.ctx, lookup.TipSet)
+		require.NoError(t, err)
+		included, err := env.client.ChainGetTipSet(env.ctx, executed.Parents())
+		require.NoError(t, err)
+		inBlock := ethtypes.NewEthBlockNumberOrHashFromNumber(ethtypes.EthUint64(included.Height()))
+
+		balance, err := env.client.EthGetBalance(env.ctx, senderAddr, inBlock)
+		require.NoError(t, err)
+		require.True(t, big.Int(balance).GreaterThan(big.Zero()), "the sender is funded at the block that includes the transfer")
+
+		params, err := json.Marshal(ethtypes.EthEstimateGasParams{
+			Tx: ethtypes.EthCall{
+				From:     &senderAddr,
+				To:       &env.contractAddr,
+				Data:     kit.EvmCalldata("getBalance(address)", kit.EvmWordBytes(env.eoaAddr[:])),
+				GasPrice: ethtypes.EthBigInt(big.NewInt(1)),
+			},
+			BlkParam: &inBlock,
+		})
+		require.NoError(t, err)
+		_, err = env.client.EthEstimateGas(env.ctx, params)
+		require.NoError(t, err)
+	})
+
+	t.Run("RevertAtCap", func(t *testing.T) {
+		_, errorsFilAddr := env.client.EVM().DeployContractFromFilename(env.ctx, "contracts/Errors.hex")
+		errorsAddr, err := ethtypes.EthAddressFromFilecoinAddress(errorsFilAddr)
+		require.NoError(t, err)
+		for _, from := range []*ethtypes.EthAddress{&env.eoaAddr, &env.contractAddr} {
+			_, err := estimate(t, ethtypes.EthCall{
+				From: from,
+				To:   &errorsAddr,
+				Data: kit.CalcFuncSignature("failDivZero()"),
+				Gas:  ethtypes.EthUint64(buildconstants.BlockGasLimit),
+			})
+			var execErr *api.ErrExecutionReverted
+			require.ErrorAs(t, err, &execErr)
+			require.Contains(t, execErr.Message, "DivideByZero")
+			require.Equal(t, "0x"+panicSelector(0x12), execErr.Data)
+		}
+	})
+}
+
+func TestStateCallGasLimit(t *testing.T) {
+	env := setupSkipSenderTest(t)
+	defer env.cancel()
+
+	var params bytes.Buffer
+	calldata := kit.EvmCalldata("getBalance(address)", kit.EvmWordBytes(env.eoaAddr[:]))
+	require.NoError(t, cbg.WriteByteArray(&params, calldata))
+
+	call := func(gasLimit int64) (*api.InvocResult, error) {
+		return env.client.StateCall(env.ctx, &types.Message{
+			From:     env.deployerFilAddr,
+			To:       env.contractFilAddr,
+			Method:   builtin.MethodsEVM.InvokeContract,
+			Params:   params.Bytes(),
+			GasLimit: gasLimit,
+		}, types.EmptyTSK)
+	}
+
+	res, err := call(0)
+	require.NoError(t, err)
+	require.Equal(t, exitcode.Ok, res.MsgRct.ExitCode, res.Error)
+	gasUsed := res.MsgRct.GasUsed
+	require.Greater(t, gasUsed, int64(1))
+
+	for _, tc := range []struct {
+		name     string
+		gasLimit int64
+		wantExit exitcode.ExitCode
+	}{
+		{"Sufficient", gasUsed, exitcode.Ok},
+		{"Insufficient", gasUsed / 2, exitcode.SysErrOutOfGas},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := call(tc.gasLimit)
+			require.NoError(t, err)
+			require.Equal(t, tc.wantExit, res.MsgRct.ExitCode, res.Error)
+		})
+	}
+
+	t.Run("AboveBlockGasLimit", func(t *testing.T) {
+		_, err := call(buildconstants.BlockGasLimit + 1)
+		require.ErrorContains(t, err, "exceeds configured cap")
+	})
+}
+
 func TestEthEstimateGas(t *testing.T) {
 	ctx, cancel, client := kit.SetupFEVMTest(t)
 	defer cancel()
@@ -1117,4 +1465,150 @@ func TestEthNullRoundHandling(t *testing.T) {
 			require.Equal(t, nullHeight, nullRoundErr.Epoch)
 		})
 	}
+}
+
+func TestEstimateGasNoFunds(t *testing.T) {
+	ctx := context.Background()
+
+	kit.QuietMiningLogs()
+
+	client, _, ens := kit.EnsembleMinimal(t, kit.MockProofs())
+	ens.InterconnectAll().BeginMining(10 * time.Millisecond)
+
+	// create a new address
+	addr, err := client.WalletNew(ctx, types.KTBLS)
+	require.NoError(t, err)
+
+	// Create that address.
+	msg := &types.Message{
+		From:  client.DefaultKey.Address,
+		To:    addr,
+		Value: big.Zero(),
+	}
+
+	sm, err := client.MpoolPushMessage(ctx, msg, nil)
+	require.NoError(t, err)
+
+	ret, err := client.StateWaitMsg(ctx, sm.Cid(), 3, api.LookbackNoLimit, true)
+	require.NoError(t, err)
+	require.True(t, ret.Receipt.ExitCode.IsSuccess())
+
+	// Make sure we can estimate gas even if we have no funds.
+	msg2 := &types.Message{
+		From:   addr,
+		To:     client.DefaultKey.Address,
+		Method: account.Methods.PubkeyAddress,
+		Value:  big.Zero(),
+	}
+
+	limit, err := client.GasEstimateGasLimit(ctx, msg2, types.EmptyTSK)
+	require.NoError(t, err)
+	require.NotZero(t, limit)
+}
+
+// Make sure that we correctly calculate the inclusion cost. Especially, make sure the FVM and Lotus
+// agree and that:
+//  1. The FVM will never charge _less_ than the inclusion cost.
+//  2. The FVM will never fine a storage provider for including a message that costs exactly the
+//     inclusion cost.
+func TestEstimateInclusion(t *testing.T) {
+	ctx := context.Background()
+
+	kit.QuietMiningLogs()
+
+	// We need this to be "correct" in this test so that lotus can get the correct gas value
+	// (which, unfortunately, looks at the height and not the current network version).
+	oldPrices := vm.Prices
+	vm.Prices = map[abi.ChainEpoch]vm.Pricelist{
+		0: oldPrices[buildconstants.UpgradeHyggeHeight],
+	}
+	t.Cleanup(func() { vm.Prices = oldPrices })
+
+	client, _, ens := kit.EnsembleMinimal(t, kit.MockProofs())
+	ens.InterconnectAll().BeginMining(10 * time.Millisecond)
+
+	// First, try sending a message that should have no fees beyond the inclusion cost. I.e., it
+	// does absolutely nothing:
+	msg := &types.Message{
+		From:       client.DefaultKey.Address,
+		To:         client.DefaultKey.Address,
+		Value:      big.Zero(),
+		GasLimit:   0,
+		GasFeeCap:  abi.NewTokenAmount(10000),
+		GasPremium: big.Zero(),
+	}
+
+	burntBefore, err := client.WalletBalance(ctx, builtin.BurntFundsActorAddr)
+	require.NoError(t, err)
+	balanceBefore, err := client.WalletBalance(ctx, client.DefaultKey.Address)
+	require.NoError(t, err)
+
+	// Sign the message and compute the correct inclusion cost.
+	var smsg *types.SignedMessage
+	for i := 0; ; i++ {
+		var err error
+		smsg, err = client.WalletSignMessage(ctx, client.DefaultKey.Address, msg)
+		require.NoError(t, err)
+		estimatedGas := vm.PricelistByEpoch(math.MaxInt).OnChainMessage(smsg.ChainLength()).Total()
+		if estimatedGas == msg.GasLimit {
+			break
+		}
+		// Try 10 times to get the right gas value.
+		require.Less(t, i, 10, "unable to estimate gas: %s != %s", estimatedGas, msg.GasLimit)
+		msg.GasLimit = estimatedGas
+	}
+
+	cid, err := client.MpoolPush(ctx, smsg)
+	require.NoError(t, err)
+	ret, err := client.StateWaitMsg(ctx, cid, 3, api.LookbackNoLimit, true)
+	require.NoError(t, err)
+	require.True(t, ret.Receipt.ExitCode.IsSuccess())
+	require.Equal(t, msg.GasLimit, ret.Receipt.GasUsed)
+
+	// Then try sending a message of the same size that tries to create an actor. This should
+	// get successfully included, but fail with out of gas:
+
+	// Mutate the last byte to get a new address of the same length.
+	toBytes := msg.To.Bytes()
+	toBytes[len(toBytes)-1] += 1 // revive:disable-line:increment-decrement
+	newAddr, err := address.NewFromBytes(toBytes)
+	require.NoError(t, err)
+
+	msg.Nonce = 1
+	msg.To = newAddr
+	smsg, err = client.WalletSignMessage(ctx, client.DefaultKey.Address, msg)
+	require.NoError(t, err)
+
+	cid, err = client.MpoolPush(ctx, smsg)
+	require.NoError(t, err)
+	ret, err = client.StateWaitMsg(ctx, cid, 3, api.LookbackNoLimit, true)
+	require.NoError(t, err)
+	require.Equal(t, ret.Receipt.ExitCode, exitcode.SysErrOutOfGas)
+	require.Equal(t, msg.GasLimit, ret.Receipt.GasUsed)
+
+	// Now make sure that the client is the only contributor to the burnt funds actor (the
+	// miners should not have been fined for either message).
+
+	burntAfter, err := client.WalletBalance(ctx, builtin.BurntFundsActorAddr)
+	require.NoError(t, err)
+	balanceAfter, err := client.WalletBalance(ctx, client.DefaultKey.Address)
+	require.NoError(t, err)
+
+	burnt := big.Sub(burntAfter, burntBefore)
+	spent := big.Sub(balanceBefore, balanceAfter)
+
+	require.Equal(t, burnt, spent)
+
+	// Finally, try to submit a message with too little gas. This should fail.
+
+	msg.Nonce = 2
+	msg.To = msg.From
+	msg.GasLimit -= 1 // revive:disable-line:increment-decrement
+
+	smsg, err = client.WalletSignMessage(ctx, client.DefaultKey.Address, msg)
+	require.NoError(t, err)
+
+	_, err = client.MpoolPush(ctx, smsg)
+	require.ErrorContains(t, err, "will not be included in a block")
+	require.ErrorContains(t, err, "cannot be less than the cost of storing a message")
 }

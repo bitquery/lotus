@@ -24,7 +24,6 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	builtintypes "github.com/filecoin-project/go-state-types/builtin"
 
-	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/build/buildconstants"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -89,7 +88,7 @@ func (e *EthUint64) UnmarshalJSON(b []byte) error {
 }
 
 func EthUint64FromHex(s string) (EthUint64, error) {
-	parsedInt, err := strconv.ParseUint(strings.Replace(s, "0x", "", -1), 16, 64)
+	parsedInt, err := strconv.ParseUint(strings.TrimPrefix(s, "0x"), 16, 64)
 	if err != nil {
 		return EthUint64(0), err
 	}
@@ -187,7 +186,7 @@ func (e *EthBytes) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	s = strings.Replace(s, "0x", "", -1)
+	s = strings.TrimPrefix(s, "0x")
 	if len(s)%2 == 1 {
 		s = "0" + s
 	}
@@ -272,12 +271,13 @@ func NewEthBlock(hasTransactions bool, tipsetLen int) EthBlock {
 }
 
 type EthCall struct {
-	From     *EthAddress `json:"from"`
-	To       *EthAddress `json:"to"`
-	Gas      EthUint64   `json:"gas"`
-	GasPrice EthBigInt   `json:"gasPrice"`
-	Value    EthBigInt   `json:"value"`
-	Data     EthBytes    `json:"data"`
+	From         *EthAddress `json:"from"`
+	To           *EthAddress `json:"to"`
+	Gas          EthUint64   `json:"gas"`
+	GasPrice     EthBigInt   `json:"gasPrice"`
+	MaxFeePerGas *EthBigInt  `json:"maxFeePerGas,omitempty"`
+	Value        EthBigInt   `json:"value"`
+	Data         EthBytes    `json:"data"`
 }
 
 func (c *EthCall) ToFilecoinMessage() (*types.Message, error) {
@@ -326,13 +326,20 @@ func (c *EthCall) ToFilecoinMessage() (*types.Message, error) {
 		method = builtintypes.MethodsEVM.InvokeContract
 	}
 
+	// Zero represents both omitted and explicitly zero gas. Preserve the block
+	// limit as the default and ceiling, and bound the value before converting to int64.
+	gasLimit := buildconstants.BlockGasLimit
+	if c.Gas > 0 && c.Gas < EthUint64(gasLimit) {
+		gasLimit = int64(c.Gas)
+	}
+
 	return &types.Message{
 		From:       from,
 		To:         to,
 		Value:      big.Int(c.Value),
 		Method:     method,
 		Params:     params,
-		GasLimit:   build.BlockGasLimit,
+		GasLimit:   gasLimit,
 		GasFeeCap:  big.Zero(),
 		GasPremium: big.Zero(),
 	}, nil
