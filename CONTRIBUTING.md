@@ -58,13 +58,14 @@ If it is unclear why one's title is getting flagged, it the regex defined in [pr
 To expedite the release process, the CHANGELOG is built-up incrementally.
 We enforce that each PR updates CHANGELOG.md or signals that the change doesn't need it.
 If the PR affects users (e.g., new feature, bug fix, system requirements change), update the CHANGELOG.md and add details to the UNRELEASED section.
+For PRs into `master`, at least one line the PR adds to CHANGELOG.md must link to the PR itself (`https://github.com/filecoin-project/lotus/pull/<number>`), so predicted PR numbers are verified. PRs into release branches, which carry entries from other PRs, only need to modify CHANGELOG.md.
 If the change does not require a CHANGELOG.md entry, do one of the following:
 - Add `[skip changelog]` to the PR description
 - Add the label `skip/changelog` to the PR
 
 Note that this is enforced with https://github.com/filecoin-project/lotus/blob/master/.github/workflows/changelog.yml
 
-Editing CHANGELOG.md on an open PR does not rerun the full CI suite. When the only difference from what a workflow last tested successfully on the PR is hand-written Markdown (anything outside the generated `documentation/en/`), the Test, Build, Docker and Check workflows reuse that result. See [detect-markdown-only-update](.github/actions/detect-markdown-only-update/action.yml).
+Editing CHANGELOG.md on an open PR does not rerun the full CI suite. When the only difference from what a workflow last tested successfully on the PR, or from the PR's base, is in files that workflow does not depend on (such as hand-written Markdown), the Test, Build, Docker and Check workflows skip their remaining jobs. See [detect-skippable-changes](.github/actions/detect-skippable-changes/action.yml) for the exact paths.
 
 ## Dependency Management
 
