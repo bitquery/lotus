@@ -1,6 +1,6 @@
 #####################################
 FROM debian:trixie AS lotus-builder
-MAINTAINER Lotus Development Team
+LABEL maintainer="Lotus Development Team"
 
 ARG GO_VERSION=1.26.10
 ARG TARGETARCH
@@ -74,7 +74,7 @@ RUN make buildall
 
 #####################################
 FROM debian:trixie AS lotus-base
-MAINTAINER Lotus Development Team
+LABEL maintainer="Lotus Development Team"
 
 # Base resources
 COPY --from=lotus-builder /etc/ssl/certs                           /etc/ssl/certs
@@ -93,7 +93,7 @@ RUN useradd -r -u 532 -U fc \
 
 #####################################
 FROM lotus-base AS lotus
-MAINTAINER Lotus Development Team
+LABEL maintainer="Lotus Development Team"
 
 COPY --from=lotus-builder /opt/filecoin/lotus /usr/local/bin/
 COPY --from=lotus-builder /opt/filecoin/lotus-shed /usr/local/bin/
@@ -111,4 +111,5 @@ RUN mkdir /var/lib/lotus /var/tmp/filecoin-proof-parameters
 EXPOSE 1234
 
 ENTRYPOINT ["/docker-lotus-entrypoint.sh"]
+
 

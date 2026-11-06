@@ -26,6 +26,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/mock"
 	"github.com/filecoin-project/lotus/chain/wallet"
+	"github.com/filecoin-project/lotus/journal"
 	_ "github.com/filecoin-project/lotus/lib/sigs/bls"
 	_ "github.com/filecoin-project/lotus/lib/sigs/secp"
 )
@@ -735,6 +736,88 @@ func TestClearNonLocal(t *testing.T) {
 	}
 }
 
+type recordingJournal struct {
+	journal.Journal
+	events map[string][]interface{}
+}
+
+func (j *recordingJournal) RecordEvent(evtType journal.EventType, supplier func() interface{}) {
+	j.events[evtType.Event] = append(j.events[evtType.Event], supplier())
+}
+
+func (j *recordingJournal) RegisterEventType(system, event string) journal.EventType {
+	return journal.EventType{System: system, Event: event}
+}
+
+func TestClearAccounting(t *testing.T) {
+	for _, tc := range []struct {
+		local           bool
+		expectedRemoved int
+	}{
+		{local: true, expectedRemoved: 20},
+		{local: false, expectedRemoved: 10},
+	} {
+		t.Run(fmt.Sprintf("local=%t", tc.local), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			tma := newTestMpoolAPI()
+			j := &recordingJournal{Journal: journal.NilJournal(), events: map[string][]interface{}{}}
+
+			mp, err := New(ctx, tma, datastore.NewMapDatastore(), filcns.DefaultUpgradeSchedule(), "mptest", j)
+			require.NoError(t, err)
+
+			w1, err := wallet.NewWallet(wallet.NewMemKeyStore())
+			require.NoError(t, err)
+			a1, err := w1.WalletNew(ctx, types.KTSecp256k1)
+			require.NoError(t, err)
+
+			w2, err := wallet.NewWallet(wallet.NewMemKeyStore())
+			require.NoError(t, err)
+			a2, err := w2.WalletNew(ctx, types.KTSecp256k1)
+			require.NoError(t, err)
+
+			tma.setBalance(a1, 1) // in FIL
+			tma.setBalance(a2, 1) // in FIL
+
+			gasLimit := gasguess.Costs[gasguess.CostKey{Code: builtin2.StorageMarketActorCodeID, M: 2}]
+			for i := 0; i < 10; i++ {
+				_, err := mp.Push(ctx, makeTestMessage(w1, a1, a2, uint64(i), gasLimit, uint64(i+1)), true)
+				require.NoError(t, err)
+			}
+			for i := 0; i < 10; i++ {
+				mustAdd(t, mp, makeTestMessage(w2, a2, a1, uint64(i), gasLimit, uint64(i+1)))
+			}
+			require.Equal(t, 20, mp.currentSize)
+
+			ch, err := mp.Updates(ctx)
+			require.NoError(t, err)
+
+			mp.Clear(ctx, tc.local)
+
+			require.Equal(t, 20-tc.expectedRemoved, mp.currentSize)
+
+			// Clear does not publish MpoolRemove updates yet; see the TODO in notifyCleared.
+			select {
+			case u := <-ch:
+				t.Fatalf("unexpected update after clear: %+v", u)
+			default:
+			}
+
+			removeEvts := j.events["remove"]
+			require.Len(t, removeEvts, 1)
+			evt := removeEvts[0].(MessagePoolEvt)
+			require.Equal(t, "remove", evt.Action)
+			require.Len(t, evt.Messages, tc.expectedRemoved)
+			if !tc.local {
+				for _, m := range evt.Messages {
+					require.Equal(t, a2, m.From)
+				}
+			}
+		})
+	}
+}
+
 func TestUpdates(t *testing.T) {
 	tma := newTestMpoolAPI()
 	ds := datastore.NewMapDatastore()
@@ -983,6 +1066,35 @@ func TestAddMessageTwice(t *testing.T) {
 	}
 }
 
+func TestAddStaleNonceSkipsSignature(t *testing.T) {
+	mp, tma := makeTestMpool()
+
+	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
+	require.NoError(t, err)
+
+	from, err := w.WalletNew(context.Background(), types.KTBLS)
+	require.NoError(t, err)
+
+	tma.setBalance(from, 1000e9)
+	tma.setStateNonce(from, 5)
+
+	to := mock.Address(1001)
+
+	// A signature over different bytes fails verification if it is checked.
+	badSig := func(nonce uint64) *types.SignedMessage {
+		sm := makeTestMessage(w, from, to, nonce, 50000000, minimumBaseFee.Uint64())
+		other := makeTestMessage(w, from, to, nonce+100, 50000000, minimumBaseFee.Uint64())
+		sm.Signature = other.Signature
+		return sm
+	}
+
+	err = mp.Add(context.TODO(), badSig(4))
+	require.ErrorIs(t, err, ErrNonceTooLow)
+
+	err = mp.Add(context.TODO(), badSig(5))
+	require.ErrorContains(t, err, "signature verification failed")
+}
+
 func TestAddMessageTwiceNonceGap(t *testing.T) {
 	tma := newTestMpoolAPI()
 
@@ -1114,7 +1226,7 @@ func TestCapGasFee(t *testing.T) {
 			return abi.NewTokenAmount(100_000_000_000), nil
 		}, msg, nil)
 		assert.Equal(t, msg.GasFeeCap.Int64(), int64(1000))
-		assert.Equal(t, msg.GasPremium.Int.Int64(), int64(1000))
+		assert.Equal(t, msg.GasPremium.Int64(), int64(1000))
 	})
 
 	t.Run("use spec maxfee", func(t *testing.T) {
@@ -1125,7 +1237,7 @@ func TestCapGasFee(t *testing.T) {
 		}
 		CapGasFee(nil, msg, &api.MessageSendSpec{MaxFee: abi.NewTokenAmount(100_000_000_000)})
 		assert.Equal(t, msg.GasFeeCap.Int64(), int64(1000))
-		assert.Equal(t, msg.GasPremium.Int.Int64(), int64(1000))
+		assert.Equal(t, msg.GasPremium.Int64(), int64(1000))
 	})
 
 	t.Run("use smaller feecap value when fee is enough", func(t *testing.T) {
@@ -1136,6 +1248,6 @@ func TestCapGasFee(t *testing.T) {
 		}
 		CapGasFee(nil, msg, &api.MessageSendSpec{MaxFee: abi.NewTokenAmount(100_000_000_000_000)})
 		assert.Equal(t, msg.GasFeeCap.Int64(), int64(100_000))
-		assert.Equal(t, msg.GasPremium.Int.Int64(), int64(100_000))
+		assert.Equal(t, msg.GasPremium.Int64(), int64(100_000))
 	})
 }

@@ -1,8 +1,10 @@
 package cliutil
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	logging "github.com/ipfs/go-log/v2"
@@ -11,6 +13,8 @@ import (
 )
 
 var log = logging.Logger("cliutil")
+
+var rpcPathSuffix = regexp.MustCompile(`/rpc/v\d+/?$`)
 
 type APIInfo struct {
 	Addr  string
@@ -38,7 +42,7 @@ func ParseApiInfo(s string) APIInfo {
 func ParseApiInfoMulti(s string) []APIInfo {
 	var apiInfos []APIInfo
 
-	allAddrs := strings.SplitN(s, ",", -1)
+	allAddrs := strings.Split(s, ",")
 
 	for _, addr := range allAddrs {
 		apiInfos = append(apiInfos, ParseApiInfo(addr))
@@ -67,9 +71,16 @@ func (a APIInfo) DialArgs(version string) (string, error) {
 		return url.JoinPath(scheme+"://"+addr, "rpc", version)
 	}
 
-	_, err = url.Parse(a.Addr)
+	u, err := url.Parse(a.Addr)
 	if err != nil {
 		return "", err
+	}
+	if rpcPath := rpcPathSuffix.FindString(u.EscapedPath()); rpcPath != "" {
+		fixed := *u
+		fixed.Path = strings.TrimSuffix(u.Path, rpcPath)
+		fixed.RawPath = strings.TrimSuffix(u.EscapedPath(), rpcPath)
+		return "", fmt.Errorf("API address %q ends with %q; use %q, Lotus adds /rpc/%s itself",
+			a.Addr, strings.TrimSuffix(rpcPath, "/"), fixed.String(), version)
 	}
 	return url.JoinPath(a.Addr, "rpc", version)
 }
